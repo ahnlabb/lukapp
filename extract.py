@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import urllib.request
 import sqlite3
+import logging
+import json
 from collections import defaultdict
 from re import sub, match
 from urllib.parse import urlparse
@@ -12,7 +14,7 @@ from bs4 import BeautifulSoup
 
 
 base_url = "https://kurser.lth.se/lot/?"
-conn = sqlite3.connect('lot.db')
+log = logging.getLogger(__name__)
 
 
 class CacheFile():
@@ -63,8 +65,13 @@ def check(mark):
     return lambda x: x == mark
 
 
-def session_time(text):
-    return text
+def session_time(node):
+    try:
+        it = map(lambda x: clean(x).lower(), node.span.span.strings)
+        return dict(zip(it, it))
+
+    except AttributeError:
+        return None
 
 
 def enumfield(clsname, values):
@@ -81,7 +88,8 @@ Cycle = enumfield('Cycle', 'G1 G2 A')
 Lang = enumfield('Lang', 'S E E1 E2')
 Mandatory = enumfield('Mandatory', 'O A V E')
 
-sqlite3.register_adapter(list, str)
+sqlite3.register_adapter(list, json.dumps)
+sqlite3.register_adapter(dict, json.dumps)
 
 index = 'course_code'
 
@@ -112,9 +120,9 @@ type_funcs = {
     'int': compose(int, text),
     'check': compose(check('X'), text),
     'lang': compose(Lang.__getitem__, text),
-    'links': lambda x: [a['href'] for a in x.find_all('a')],
+    'links': lambda x: {clean(a.get_text()): a['href'] for a in x.find_all('a')},
     'none': lambda x: None,
-    'session_time': compose(session_time, text)
+    'session_time': session_time
 }
 
 
@@ -138,57 +146,19 @@ type_affinities = {
 prog_specific = {'mand_elect', 'year', 'from_year'}
 
 
+def clean(x):
+    # Think carefully about SQL before changing the following
+    return sub(r'[^A-z0-9_]', '', x.replace(' ', '_'))
+
+
 def _process_header(thead):
     th_lst = thead.tr.find_all('th')
-
-    def clean(x):
-        # Think carefully about SQL before changing the following
-        return sub(r'[^A-z0-9_]', '', x.replace(' ', '_'))
 
     def title(x):
         return x.lstrip('0123456789/\n ').split('\n')[0]
 
     header = [clean(title(text(h))).lower() for h in th_lst]
     return header
-
-
-def process_prog(soup, prog):
-    failures = defaultdict(list)
-    for course_lst in soup.find_all('table', class_='CourseListView'):
-        course_type = course_lst.parent.previous_sibling.previous_sibling.get('id')
-
-        header = _process_header(course_lst.thead)
-
-        addition = []
-        if course_type:
-            m = match(r'ak(\d)_([OAVE])', course_type)
-            if m:
-                addition = [m[1], m[1], m[2]]
-                header.extend(["year", "from_year", "mand_elect"])
-                course_type = None
-
-        index_column = header.index(index)
-        header.pop(index_column)
-
-        for tr in course_lst.tbody.find_all('tr'):
-            row = tr.find_all('td')
-            name = parse_field(index, row.pop(index_column))
-            if course_type:
-                courses.specializations[prog][course_type].add(name)
-            for h, r in zip(header, chain(row, addition)):
-                try:
-                    val = parse_field(h, r)
-
-                    field_name = h
-                    if h in prog_specific:
-                        field_name = prog + '_' + field_name
-
-                    courses.fields[field_name] = type_affinities[field_types[h]]
-                    courses.set(name, field_name, val)
-
-                except (ValueError, KeyError):
-                    failures[name].append((h, r))
-    return failures
 
 
 def get_query(**kwargs):
@@ -211,33 +181,111 @@ class CourseList():
             row[key] = value
 
     def columns(self):
-        return chain([(index, 'TEXT')], self.fields.items())
+        return self.fields.items()
 
     def __iter__(self):
         for name, fields in self.courses.items():
-            row = chain([name], (fields.get(f, None) for f in self.fields))
-            yield list(row)
+            yield [fields.get(f, None) for f in self.fields]
+
+    def process_prog(self, soup, prog):
+        for course_lst in soup.find_all('table', class_='CourseListView'):
+            course_type = course_lst.parent.previous_sibling.previous_sibling.get('id')
+
+            header = _process_header(course_lst.thead)
+
+            addition = []
+            if course_type:
+                m = match(r'ak(\d)_([OAVE])', course_type)
+                if m:
+                    addition = [m[1], m[1], m[2]]
+                    header.extend(["year", "from_year", "mand_elect"])
+                    course_type = None
+
+            index_column = header.index(index)
+
+            for tr in course_lst.tbody.find_all('tr'):
+                row = tr.find_all('td')
+                name = parse_field(index, row[index_column])
+                if course_type:
+                    self.specializations[prog][course_type].add(name)
+                for h, r in zip(header, chain(row, addition)):
+                    try:
+                        val = parse_field(h, r)
+
+                        field_name = h
+                        if h in prog_specific:
+                            field_name = prog + '_' + field_name
+                        if type(val) is dict:
+                            for key in val:
+                                f = field_name + '_' + key
+                                self.fields[f] = type_affinities[field_types[h]]
+                                self.set(name, f, val[key])
+                        else:
+                            self.fields[field_name] = type_affinities[field_types[h]]
+                            self.set(name, field_name, val)
+
+                    except (ValueError, KeyError):
+                        log.debug(f"failed to process field: {h:<15} on course: {name:<6} {prog:<8}")
 
 
-courses = CourseList()
-soup = get_query(val='program', lang='en')
-for prog in soup.find_all('input', attrs={'type': 'radio', 'name': 'prog'}):
-    name = prog['value']
-    prog_soup = get_query(val='program', prog=name, lang='en')
-    failures = process_prog(prog_soup, name)
+def _build_courselist():
+    courses = CourseList()
+    soup = get_query(val='program', lang='en')
+    for prog in soup.find_all('input', attrs={'type': 'radio', 'name': 'prog'}):
+        name = prog['value']
+        prog_soup = get_query(val='program', prog=name, lang='en')
+        courses.process_prog(prog_soup, name)
 
-c = conn.cursor()
+    return courses
 
-# To generate the table string interpolation has to be used since
-# there is no equivalent to parameter substitution for objects.
-c.execute('CREATE TABLE courses ({})'.format(
-    ', '.join(f"'{name}' {affinity}" for name, affinity in courses.columns()))
-)
 
-c.executemany(
-    'INSERT INTO courses VALUES ({})'.format(','.join(['?']*(len(courses.fields) + 1))),
-    iter(courses)
-)
+def _create_course_table(courses, conn):
+    c = conn.cursor()
 
-conn.commit()
-conn.close()
+    # To generate the table string interpolation has to be used since
+    # there is no equivalent to parameter substitution for objects.
+    c.execute('CREATE TABLE courses ({})'.format(
+        ', '.join(f"'{name}' {affinity}" for name, affinity in courses.columns()))
+    )
+
+    c.executemany(
+        'INSERT INTO courses VALUES ({})'.format(','.join(['?'] * len(courses.fields))),
+        iter(courses)
+    )
+
+    conn.commit()
+
+
+def get_args(commands):
+    parser = ArgumentParser()
+    parser.add_argument('-l', '--log', default='debug', help="set the log level")
+    parser.add_argument('command', action='store', choices=commands)
+    return parser.parse_args()
+
+
+def init_log():
+    loglvls = {
+        'debug': logging.DEBUG,
+        'info': logging.INFO,
+        'warning': logging.WARNING,
+        'error': logging.ERROR,
+        'critical': logging.CRITICAL
+    }
+    logging.basicConfig(level=loglvls[args.log])
+
+
+def _create():
+    courses = _build_courselist()
+    _create_course_table(courses, conn)
+    print(','.join(key for d in courses.specializations.values() for key in d))
+    conn.close()
+
+
+if __name__ == '__main__':
+    conn = sqlite3.connect('lot.db')
+    commands = {
+        'create': _create
+    }
+    args = get_args(commands)
+    init_log()
+    commands[args.command]()

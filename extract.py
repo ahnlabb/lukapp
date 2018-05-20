@@ -5,7 +5,9 @@ import logging
 import json
 from collections import defaultdict
 from re import sub, match
+import re
 from urllib.parse import urlparse
+from urllib.error import HTTPError
 from argparse import ArgumentParser
 from pathlib import Path
 from itertools import chain
@@ -281,10 +283,103 @@ def _create():
     conn.close()
 
 
+def _ceq_get_query(code, year, sp):
+    semester = 'HT'
+    if sp > 2:
+        semester = 'VT'
+        sp -= 2
+
+    url = f'http://www.ceq.lth.se/rapporter/{year}_{semester}/LP{sp}/{code}_{year}_{semester}_LP{sp}_slutrapport_en.html'
+    log.debug(f'requesting url: {url}')
+    with urllib.request.urlopen(url) as req:
+        return BeautifulSoup(req.read(), 'html.parser')
+
+
+def _table_info():
+    c = conn.cursor()
+    query = c.execute('PRAGMA table_info(courses)')
+    _, name, affinity, _, _, _ = map(list, zip(*query))
+    return name, affinity
+
+
+def _table():
+    print(_table_info())
+
+
+def _add_column_if_absent(cursor, colname, affinity):
+    names, affinities = _table_info()
+    if colname not in names:
+        cursor.execute(f'ALTER TABLE courses ADD COLUMN {colname} {affinity}')
+
+
+def _get_latest_ceq(code, sp):
+    allsp = chain([sp], set(range(1, 5)) - {sp})
+    for testsp in allsp:
+        for year in range(2018, 2014, -1):
+            try:
+                return _ceq_get_query(code, year, testsp)
+            except HTTPError:
+                log.debug(f'request failed for course: {code}, year: {year}, sp: {testsp}')
+                pass
+
+
+def _ceq():
+    def tablevalue(soup, rowname):
+        return soup.find(string=rowname).parent.find_next_sibling('td').string
+
+    c = conn.cursor()
+    ceq_columns = [
+        'ceq_pass_share',
+        'ceq_overall_score',
+        'ceq_important',
+        'ceq_good_teaching',
+        'ceq_clear_goals',
+        'ceq_assessment',
+        'ceq_workload'
+    ]
+    for col in ceq_columns:
+        _add_column_if_absent(c, col, 'INTEGER')
+
+    query = c.execute('SELECT course_code, sp1_lectures, sp2_lectures, sp3_lectures, sp4_lectures FROM courses')
+    courses_complete = dict()  # Complete CEQ containing scores
+    courses_basic = dict()  # Basic CEQ e.g. containing share of student that passed
+    for code, *sp in query:
+        try:
+            last, _ = next(filter(lambda x: x[1], enumerate(sp[::-1])))
+            soup = _get_latest_ceq(code, 4 - last)
+            if soup:
+                passed = tablevalue(soup, re.compile('Number and share of passed students.*'))
+                pass_share = int(match(r'\d+\s*/\s*(\d+)\s*%', passed)[1])
+                try:
+                    overall_score = int(tablevalue(soup, 'Overall, I am satisfied with this course'))
+                    important = int(tablevalue(soup, 'The course seems important for my education'))
+                    good_teaching = int(tablevalue(soup, 'Good Teaching'))
+                    clear_goals = int(tablevalue(soup, 'Clear Goals and Standards'))
+                    assessment = int(tablevalue(soup, 'Appropriate Assessment'))
+                    workload = int(tablevalue(soup, 'Appropriate Workload'))
+                    courses_complete[code] = (pass_share, overall_score, important, good_teaching, clear_goals, assessment, workload)
+                except AttributeError:
+                    courses_basic[code] = pass_share
+            else:
+                log.debug(f'No CEQ found for {code} SP{last}')
+        except StopIteration:
+            log.debug(f'Course {code} lacks sp data')
+
+    log.debug(f'No. courses with a complete CEQ: {len(courses_complete)}')
+    log.debug(f'No. courses with a basic CEQ: {len(courses_basic)}')
+    complete_values = list((*v, k) for k, v in courses_complete.items())
+    c.executemany(f"UPDATE courses SET {', '.join(col + ' = ?' for col in ceq_columns)} WHERE course_code = ?", complete_values)
+    basic_values = list((v, k) for k, v in courses_basic.items())
+    c.executemany("UPDATE courses SET ceq_pass_share = ? WHERE course_code = ?", basic_values)
+    conn.commit()
+
+
 if __name__ == '__main__':
     conn = sqlite3.connect('lot.db')
     commands = {
-        'create': _create
+        'create': _create,
+        'ceq': _ceq,
+        'table': _table
     }
     args = get_args(commands)
     init_log()

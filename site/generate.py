@@ -9,9 +9,10 @@ log = logging.getLogger(__name__)
 
 def elmstr(x):
     if type(x) is str:
-        return '"{}"'.format(x)
-    else:
-        return str(x)
+        return f'(Just "{x}")'
+    if x is None:
+        return 'Nothing'
+    return f'(Just {x})'
 
 
 def coursestr(c):
@@ -43,7 +44,7 @@ if __name__ == '__main__':
     args = get_args()
     conn = sqlite3.connect(args.database)
     c = conn.cursor()
-    query = c.execute('SELECT course_code, credits, IFNULL(cycle,0), course_name, IFNULL(ceq_pass_share,-1), IFNULL(ceq_overall_score,-1), IFNULL(ceq_important,-1) FROM courses')
+    query = c.execute('SELECT course_code, credits, cycle, course_name, ceq_pass_share, ceq_overall_score, ceq_important FROM courses')
     if args.output:
         with open(args.output, 'w') as out:
             _write_table(out, args.template)

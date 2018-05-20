@@ -61,7 +61,7 @@ view { courses, tableState, query } =
             String.toLower query
 
         acceptableCourses =
-            List.filter (String.contains lowerQuery << String.toLower << .code) courses
+            List.filter (String.contains lowerQuery << String.toLower << Maybe.withDefault "-" << .code) courses
     in
         div []
             [ h1 [] [ text "Courses" ]
@@ -73,16 +73,16 @@ view { courses, tableState, query } =
 config : Table.Config Course Msg
 config =
     Table.config
-        { toId = .code
+        { toId = Maybe.withDefault "-" << .code
         , toMsg = SetTableState
         , columns =
-            [ Table.stringColumn "Course Code" .code
-            , Table.floatColumn "Credits" .credits
-            , Table.stringColumn "Cycle" (toEnum cycles << .cycle)
-            , Table.stringColumn "Course Name" .name
-            , Table.intColumn "Pass Rate (%)" .pass
-            , Table.intColumn "CEQ overall score" .score
-            , Table.intColumn "CEQ importance for my education" .important
+            [ maybeStringColumn "Course Code" .code
+            , maybeFloatColumn "Credits" .credits
+            , maybeIntColumn "Cycle" .cycle
+            , maybeStringColumn "Course Name" .name
+            , maybeIntColumn "Pass Rate (%)" .pass
+            , maybeIntColumn "CEQ overall score" .score
+            , maybeIntColumn "CEQ importance for my education" .important
             ]
         }
 
@@ -92,6 +92,33 @@ cycles =
     [ "G1", "G2", "A" ]
 
 
-toEnum : List String -> Int -> String
+toEnum : List String -> Int -> Maybe String
 toEnum lst num =
-    Maybe.withDefault "" (List.head (List.drop num lst))
+    List.head (List.drop num lst)
+
+
+maybeIntColumn : String -> (data -> Maybe Int) -> Table.Column data msg
+maybeIntColumn name toMaybeInt =
+    Table.customColumn
+        { name = name
+        , viewData = Maybe.withDefault "-" << Maybe.map toString << toMaybeInt
+        , sorter = Table.increasingOrDecreasingBy (Maybe.withDefault -1000 << toMaybeInt)
+        }
+
+
+maybeFloatColumn : String -> (data -> Maybe Float) -> Table.Column data msg
+maybeFloatColumn name toMaybeFloat =
+    Table.customColumn
+        { name = name
+        , viewData = Maybe.withDefault "-" << Maybe.map toString << toMaybeFloat
+        , sorter = Table.increasingOrDecreasingBy (Maybe.withDefault -1.0 << toMaybeFloat)
+        }
+
+
+maybeStringColumn : String -> (data -> Maybe String) -> Table.Column data msg
+maybeStringColumn name toMaybeString =
+    Table.customColumn
+        { name = name
+        , viewData = Maybe.withDefault "-" << toMaybeString
+        , sorter = Table.increasingOrDecreasingBy (Maybe.withDefault "" << toMaybeString)
+        }

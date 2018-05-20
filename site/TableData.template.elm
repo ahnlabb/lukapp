@@ -2,13 +2,13 @@ module TableData exposing (Course, courses)
 
 
 type alias Course =
-    { code : String
-    , credits : Float
-    , cycle : Int
-    , name : String
-    , pass : Int
-    , score : Int
-    , important : Int
+    { code : Maybe String
+    , credits : Maybe Float
+    , cycle : Maybe Int
+    , name : Maybe String
+    , pass : Maybe Int
+    , score : Maybe Int
+    , important : Maybe Int
     }
 
 

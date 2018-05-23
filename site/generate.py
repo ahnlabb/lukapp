@@ -44,7 +44,7 @@ if __name__ == '__main__':
     args = get_args()
     conn = sqlite3.connect(args.database)
     c = conn.cursor()
-    query = c.execute('SELECT course_code, credits, cycle, course_name, ceq_pass_share, ceq_overall_score, ceq_important FROM courses')
+    query = c.execute('SELECT course_code, credits, cycle, course_name, links_W, ceq_url, ceq_pass_share, ceq_overall_score, ceq_important, ceq_good_teaching, ceq_clear_goals, ceq_assessment, ceq_workload  FROM courses')
     if args.output:
         with open(args.output, 'w') as out:
             _write_table(out, args.template)

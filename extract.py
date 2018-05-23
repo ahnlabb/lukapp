@@ -201,7 +201,6 @@ class CourseList():
                 if m:
                     addition = [m[1], m[1], m[2]]
                     header.extend(["year", "from_year", "mand_elect"])
-                    course_type = None
 
             index_column = header.index(index)
 
@@ -276,10 +275,23 @@ def init_log():
     logging.basicConfig(level=loglvls[args.log])
 
 
+def _create_specializations_table(courses, conn):
+    c = conn.cursor()
+
+    c.execute('CREATE TABLE specializations (program TEXT, courses TEXT)')
+
+    c.executemany(
+        'INSERT INTO specializations VALUES (?,?)',
+        ((k, json.dumps({key: list(courseset) for key, courseset in v.items()})) for k, v in courses.specializations.items())
+    )
+
+    conn.commit()
+
+
 def _create():
     courses = _build_courselist()
     _create_course_table(courses, conn)
-    print(','.join(key for d in courses.specializations.values() for key in d))
+    _create_specializations_table(courses, conn)
     conn.close()
 
 
@@ -292,7 +304,7 @@ def _ceq_get_query(code, year, sp):
     url = f'http://www.ceq.lth.se/rapporter/{year}_{semester}/LP{sp}/{code}_{year}_{semester}_LP{sp}_slutrapport_en.html'
     log.debug(f'requesting url: {url}')
     with urllib.request.urlopen(url) as req:
-        return BeautifulSoup(req.read(), 'html.parser')
+        return BeautifulSoup(req.read(), 'html.parser'), url
 
 
 def _table_info():
@@ -321,6 +333,12 @@ def _get_latest_ceq(code, sp):
             except HTTPError:
                 log.debug(f'request failed for course: {code}, year: {year}, sp: {testsp}')
                 pass
+    return None, None
+
+
+def _update_courses(coursedict, columns, cursor):
+    values = list((*v, k) for k, v in coursedict.items())
+    cursor.executemany(f"UPDATE courses SET {', '.join(col + ' = ?' for col in columns)} WHERE course_code = ?", values)
 
 
 def _ceq():
@@ -329,6 +347,7 @@ def _ceq():
 
     c = conn.cursor()
     ceq_columns = [
+        'ceq_url',
         'ceq_pass_share',
         'ceq_overall_score',
         'ceq_important',
@@ -346,7 +365,7 @@ def _ceq():
     for code, *sp in query:
         try:
             last, _ = next(filter(lambda x: x[1], enumerate(sp[::-1])))
-            soup = _get_latest_ceq(code, 4 - last)
+            soup, url = _get_latest_ceq(code, 4 - last)
             if soup:
                 passed = tablevalue(soup, re.compile('Number and share of passed students.*'))
                 pass_share = int(match(r'\d+\s*/\s*(\d+)\s*%', passed)[1])
@@ -357,9 +376,9 @@ def _ceq():
                     clear_goals = int(tablevalue(soup, 'Clear Goals and Standards'))
                     assessment = int(tablevalue(soup, 'Appropriate Assessment'))
                     workload = int(tablevalue(soup, 'Appropriate Workload'))
-                    courses_complete[code] = (pass_share, overall_score, important, good_teaching, clear_goals, assessment, workload)
+                    courses_complete[code] = (url, pass_share, overall_score, important, good_teaching, clear_goals, assessment, workload)
                 except AttributeError:
-                    courses_basic[code] = pass_share
+                    courses_basic[code] = (url, pass_share)
             else:
                 log.debug(f'No CEQ found for {code} SP{last}')
         except StopIteration:
@@ -367,10 +386,9 @@ def _ceq():
 
     log.debug(f'No. courses with a complete CEQ: {len(courses_complete)}')
     log.debug(f'No. courses with a basic CEQ: {len(courses_basic)}')
-    complete_values = list((*v, k) for k, v in courses_complete.items())
-    c.executemany(f"UPDATE courses SET {', '.join(col + ' = ?' for col in ceq_columns)} WHERE course_code = ?", complete_values)
-    basic_values = list((v, k) for k, v in courses_basic.items())
-    c.executemany("UPDATE courses SET ceq_pass_share = ? WHERE course_code = ?", basic_values)
+    _update_courses(courses_complete, ceq_columns, c)
+    _update_courses(courses_basic, ceq_columns[0:2], c)
+    
     conn.commit()
 
 

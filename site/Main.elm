@@ -1,7 +1,7 @@
 module Main exposing (..)
 
-import Html exposing (Html, div, h1, input, text, select, option)
-import Html.Attributes exposing (placeholder, value)
+import Html exposing (Html, div, h1, input, text, select, option, a)
+import Html.Attributes exposing (placeholder, value, href, style, width)
 import Html.Events exposing (onInput, onClick)
 import Table
 import TableData exposing (Course, courses)
@@ -60,30 +60,116 @@ view { courses, tableState, query } =
         lowerQuery =
             String.toLower query
 
+        containsQuery =
+            String.contains lowerQuery << String.toLower << defaultEntry
+
         acceptableCourses =
-            List.filter (String.contains lowerQuery << String.toLower << Maybe.withDefault "-" << .code) courses
+            List.filter (\course -> containsQuery (.code course) || containsQuery (.name course)) courses
     in
         div []
-            [ h1 [] [ text "Courses" ]
-            , input [ placeholder "Filter by Course Code", onInput SetQuery ] []
+            [ Html.node "link" [ Html.Attributes.rel "stylesheet", Html.Attributes.href "style.css" ] []
+            , h1 [] [ text "Courses" ]
+            , input [ placeholder "Filter by Name or Code", onInput SetQuery ] []
             , Table.view config tableState acceptableCourses
             ]
 
 
+defaultEntry : Maybe String -> String
+defaultEntry =
+    Maybe.withDefault "-"
+
+
+switchMaybe ifJust ifNothing test =
+    case test of
+        Just _ ->
+            ifJust
+
+        Nothing ->
+            ifNothing
+
+
+ceqLink code ceqlink =
+    case ceqlink of
+        Just lnk ->
+            lnk
+
+        Nothing ->
+            case code of
+                Just c ->
+                    "http://www.ceq.lth.se/rapporter/?kurskod=" ++ c ++ "&lang=en"
+
+                Nothing ->
+                    "http://www.ceq.lth.se/rapporter/?lang=en"
+
+
+defaultCustomizations =
+    Table.defaultCustomizations
+
+
+customThead : List ( String, Table.Status, Html.Attribute msg ) -> Table.HtmlDetails msg
+customThead headers =
+    Table.HtmlDetails [] (List.map customTheadHelp headers)
+
+
+customTheadHelp : ( String, Table.Status, Html.Attribute msg ) -> Html msg
+customTheadHelp ( name, status, onClick ) =
+    let
+        content =
+            case status of
+                Table.Unsortable ->
+                    [ Html.text name ]
+
+                Table.Sortable selected ->
+                    [ Html.text name
+                    , if selected then
+                        coloredSymbol "#555" "↓"
+                      else
+                        coloredSymbol "#ccc" "↓"
+                    ]
+
+                Table.Reversible Nothing ->
+                    [ Html.text name
+                    , coloredSymbol "#ccc" "↕"
+                    ]
+
+                Table.Reversible (Just isReversed) ->
+                    [ Html.text name
+                    , coloredSymbol "#555"
+                        (if isReversed then
+                            "↑"
+                         else
+                            "↓"
+                        )
+                    ]
+    in
+        Html.th [ onClick ] content
+
+
+coloredSymbol color symbol =
+    Html.span [ style [ ( "color", color ) ] ] [ Html.text (" " ++ symbol) ]
+
+
 config : Table.Config Course Msg
 config =
-    Table.config
+    Table.customConfig
         { toId = Maybe.withDefault "-" << .code
         , toMsg = SetTableState
         , columns =
             [ maybeStringColumn "Course Code" .code
             , maybeFloatColumn "Credits" .credits
-            , maybeIntColumn "Cycle" .cycle
+            , maybeStringColumn "Cycle" (Maybe.andThen (toEnum cycles) << .cycle)
             , maybeStringColumn "Course Name" .name
+            , maybeLinkColumn "Webpage" (\data -> Maybe.map (SimpleLink "link") (.webpage data))
+            , linkColumn "CEQ" (\data -> SimpleLink "link" (ceqLink (.code data) (.ceqUrl data)))
             , maybeIntColumn "Pass Rate (%)" .pass
-            , maybeIntColumn "CEQ overall score" .score
-            , maybeIntColumn "CEQ importance for my education" .important
+            , maybeIntColumn "Score" .score
+            , maybeIntColumn "Importance" .important
+            , maybeIntColumn "Teaching" .important
+            , maybeIntColumn "Goals" .important
+            , maybeIntColumn "Assessment" .important
+            , maybeIntColumn "Workload" .important
             ]
+        , customizations = defaultCustomizations
         }
 
 
@@ -94,14 +180,14 @@ cycles =
 
 toEnum : List String -> Int -> Maybe String
 toEnum lst num =
-    List.head (List.drop num lst)
+    List.head <| List.drop (num - 1) lst
 
 
 maybeIntColumn : String -> (data -> Maybe Int) -> Table.Column data msg
 maybeIntColumn name toMaybeInt =
     Table.customColumn
         { name = name
-        , viewData = Maybe.withDefault "-" << Maybe.map toString << toMaybeInt
+        , viewData = defaultEntry << Maybe.map toString << toMaybeInt
         , sorter = Table.increasingOrDecreasingBy (Maybe.withDefault -1000 << toMaybeInt)
         }
 
@@ -110,7 +196,7 @@ maybeFloatColumn : String -> (data -> Maybe Float) -> Table.Column data msg
 maybeFloatColumn name toMaybeFloat =
     Table.customColumn
         { name = name
-        , viewData = Maybe.withDefault "-" << Maybe.map toString << toMaybeFloat
+        , viewData = defaultEntry << Maybe.map toString << toMaybeFloat
         , sorter = Table.increasingOrDecreasingBy (Maybe.withDefault -1.0 << toMaybeFloat)
         }
 
@@ -119,6 +205,45 @@ maybeStringColumn : String -> (data -> Maybe String) -> Table.Column data msg
 maybeStringColumn name toMaybeString =
     Table.customColumn
         { name = name
-        , viewData = Maybe.withDefault "-" << toMaybeString
+        , viewData = defaultEntry << toMaybeString
         , sorter = Table.increasingOrDecreasingBy (Maybe.withDefault "" << toMaybeString)
+        }
+
+
+type alias SimpleLink =
+    { title : String
+    , target : String
+    }
+
+
+viewLink : SimpleLink -> Table.HtmlDetails msg
+viewLink { title, target } =
+    Table.HtmlDetails []
+        [ a [ href target ] [ text title ] ]
+
+
+linkColumn : String -> (data -> SimpleLink) -> Table.Column data msg
+linkColumn name toLink =
+    Table.veryCustomColumn
+        { name = name
+        , viewData = viewLink << toLink
+        , sorter = Table.increasingOrDecreasingBy (.title << toLink)
+        }
+
+
+viewMaybeLink maybeLink =
+    case maybeLink of
+        Just x ->
+            viewLink x
+
+        Nothing ->
+            Table.HtmlDetails [] [ text "-" ]
+
+
+maybeLinkColumn : String -> (data -> Maybe SimpleLink) -> Table.Column data msg
+maybeLinkColumn name toMaybeLink =
+    Table.veryCustomColumn
+        { name = name
+        , viewData = viewMaybeLink << toMaybeLink
+        , sorter = Table.unsortable
         }

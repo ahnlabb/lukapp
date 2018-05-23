@@ -6,9 +6,15 @@ type alias Course =
     , credits : Maybe Float
     , cycle : Maybe Int
     , name : Maybe String
+    , webpage : Maybe String
+    , ceqUrl : Maybe String
     , pass : Maybe Int
     , score : Maybe Int
     , important : Maybe Int
+    , teaching : Maybe Int
+    , goals : Maybe Int
+    , assessment : Maybe Int
+    , workload : Maybe Int
     }
 
 

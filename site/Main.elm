@@ -164,10 +164,10 @@ config =
             , maybeIntColumn "Pass Rate (%)" .pass
             , maybeIntColumn "Score" .score
             , maybeIntColumn "Importance" .important
-            , maybeIntColumn "Teaching" .important
-            , maybeIntColumn "Goals" .important
-            , maybeIntColumn "Assessment" .important
-            , maybeIntColumn "Workload" .important
+            , maybeIntColumn "Teaching" .teaching
+            , maybeIntColumn "Goals" .goals
+            , maybeIntColumn "Assessment" .assessment
+            , maybeIntColumn "Workload" .workload
             ]
         , customizations = defaultCustomizations
         }

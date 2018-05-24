@@ -3,3 +3,4 @@ cache/
 *.db
 elm-stuff
 TableData.elm
+Specializations.elm

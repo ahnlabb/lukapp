@@ -1,7 +1,7 @@
 module Main exposing (..)
 
-import Html exposing (Html, div, h1, input, text, select, option, a)
-import Html.Attributes exposing (placeholder, value, href, style, width)
+import Html exposing (Html, div, h1, input, text, select, option, a, fieldset, label)
+import Html.Attributes exposing (placeholder, value, href, style, width, type_, checked)
 import Html.Events exposing (onInput, onClick)
 import Table
 import TableData exposing (Course, courses)
@@ -19,6 +19,7 @@ main =
 type alias Model =
     { courses : List Course
     , tableState : Table.State
+    , ceqOnly : Bool
     , query : String
     }
 
@@ -29,6 +30,7 @@ init courses =
         model =
             { courses = courses
             , tableState = Table.initialSort "Course Code"
+            , ceqOnly = True
             , query = ""
             }
     in
@@ -38,6 +40,7 @@ init courses =
 type Msg
     = SetQuery String
     | SetTableState Table.State
+    | ToggleCeqOnly
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -53,9 +56,14 @@ update msg model =
             , Cmd.none
             )
 
+        ToggleCeqOnly ->
+            ( { model | ceqOnly = not model.ceqOnly }
+            , Cmd.none
+            )
+
 
 view : Model -> Html Msg
-view { courses, tableState, query } =
+view { courses, tableState, ceqOnly, query } =
     let
         lowerQuery =
             String.toLower query
@@ -63,13 +71,30 @@ view { courses, tableState, query } =
         containsQuery =
             String.contains lowerQuery << String.toLower << defaultEntry
 
+        queriedFilter =
+            List.filter (\course -> containsQuery (.code course) || containsQuery (.name course))
+
+        hasCeqFilter =
+            List.filter <| ((<) 3) << (Maybe.withDefault 0) << .ceqAnswers
+
         acceptableCourses =
-            List.filter (\course -> containsQuery (.code course) || containsQuery (.name course)) courses
+            (if ceqOnly then
+                (hasCeqFilter << queriedFilter)
+             else
+                queriedFilter
+            )
+                courses
     in
         div []
             [ Html.node "link" [ Html.Attributes.rel "stylesheet", Html.Attributes.href "style.css" ] []
             , h1 [] [ text "Courses" ]
-            , input [ placeholder "Filter by Name or Code", onInput SetQuery ] []
+            , fieldset []
+                [ input [ placeholder "Filter by Name or Code", onInput SetQuery ] []
+                , label []
+                    [ input [ type_ "checkbox", onClick ToggleCeqOnly, checked ceqOnly ] []
+                    , text "Only show courses with at least 3 CEQ answers"
+                    ]
+                ]
             , Table.view config tableState acceptableCourses
             ]
 

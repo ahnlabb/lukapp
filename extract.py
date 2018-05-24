@@ -338,7 +338,8 @@ def _get_latest_ceq(code, sp):
 
 def _update_courses(coursedict, columns, cursor):
     values = list((*v, k) for k, v in coursedict.items())
-    cursor.executemany(f"UPDATE courses SET {', '.join(col + ' = ?' for col in columns)} WHERE course_code = ?", values)
+    sql = f"UPDATE courses SET {', '.join(col + ' = ?' for col in columns)} WHERE course_code = ?"
+    cursor.executemany(sql, values)
 
 
 def _ceq():
@@ -349,6 +350,7 @@ def _ceq():
     ceq_columns = [
         'ceq_url',
         'ceq_pass_share',
+        'ceq_answers',
         'ceq_overall_score',
         'ceq_important',
         'ceq_good_teaching',
@@ -370,14 +372,18 @@ def _ceq():
                 passed = tablevalue(soup, re.compile('Number and share of passed students.*'))
                 pass_share = int(match(r'\d+\s*/\s*(\d+)\s*%', passed)[1])
                 try:
+                    answer_field = tablevalue(soup, 'Number answers and response rate')
+                    answers = int(match(r'(\d+)\s*/\s*\d+\s*%', answer_field)[1])
                     overall_score = int(tablevalue(soup, 'Overall, I am satisfied with this course'))
                     important = int(tablevalue(soup, 'The course seems important for my education'))
                     good_teaching = int(tablevalue(soup, 'Good Teaching'))
                     clear_goals = int(tablevalue(soup, 'Clear Goals and Standards'))
                     assessment = int(tablevalue(soup, 'Appropriate Assessment'))
                     workload = int(tablevalue(soup, 'Appropriate Workload'))
-                    courses_complete[code] = (url, pass_share, overall_score, important, good_teaching, clear_goals, assessment, workload)
+                    courses_complete[code] = (url, pass_share, answers, overall_score, important, good_teaching, clear_goals, assessment, workload)
                 except AttributeError:
+                    courses_basic[code] = (url, pass_share)
+                except TypeError:
                     courses_basic[code] = (url, pass_share)
             else:
                 log.debug(f'No CEQ found for {code} SP{last}')
@@ -388,7 +394,7 @@ def _ceq():
     log.debug(f'No. courses with a basic CEQ: {len(courses_basic)}')
     _update_courses(courses_complete, ceq_columns, c)
     _update_courses(courses_basic, ceq_columns[0:2], c)
-    
+
     conn.commit()
 
 

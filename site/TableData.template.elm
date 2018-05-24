@@ -9,6 +9,7 @@ type alias Course =
     , webpage : Maybe String
     , ceqUrl : Maybe String
     , pass : Maybe Int
+    , ceqAnswers : Maybe Int
     , score : Maybe Int
     , important : Maybe Int
     , teaching : Maybe Int

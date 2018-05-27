@@ -3,8 +3,9 @@ module Main exposing (..)
 import Html exposing (Html, div, h1, input, text, select, option, a, fieldset, label)
 import Html.Attributes exposing (placeholder, value, href, style, width, type_, checked)
 import Html.Events exposing (onInput, onClick)
+import Dict
 import Table
-import TableData exposing (Course, courses)
+import SiteData exposing (specializations, Course, courses)
 
 
 main =
@@ -17,14 +18,15 @@ main =
 
 
 type alias Model =
-    { courses : List Course
+    { courses : Dict.Dict String Course
     , tableState : Table.State
     , ceqOnly : Bool
     , query : String
+    , program : Maybe String
     }
 
 
-init : List Course -> ( Model, Cmd Msg )
+init : Dict.Dict String Course -> ( Model, Cmd Msg )
 init courses =
     let
         model =
@@ -32,6 +34,7 @@ init courses =
             , tableState = Table.initialSort "Course Code"
             , ceqOnly = True
             , query = ""
+            , program = Nothing
             }
     in
         ( model, Cmd.none )
@@ -41,6 +44,7 @@ type Msg
     = SetQuery String
     | SetTableState Table.State
     | ToggleCeqOnly
+    | SetProgram String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -61,42 +65,66 @@ update msg model =
             , Cmd.none
             )
 
+        SetProgram newProgram ->
+            ( { model
+                | program =
+                    if newProgram == "" then
+                        Nothing
+                    else
+                        Just newProgram
+              }
+            , Cmd.none
+            )
+
 
 view : Model -> Html Msg
-view { courses, tableState, ceqOnly, query } =
+view { courses, tableState, ceqOnly, query, program } =
     let
         lowerQuery =
             String.toLower query
 
         containsQuery =
-            String.contains lowerQuery << String.toLower << defaultEntry
+            String.contains lowerQuery << String.toLower
 
         queriedFilter =
-            List.filter (\course -> containsQuery (.code course) || containsQuery (.name course))
+            List.filter (\course -> containsQuery (.code course) || containsQuery (defaultEntry (.name course)))
 
         hasCeqFilter =
             List.filter <| ((<) 3) << (Maybe.withDefault 0) << .ceqAnswers
 
-        acceptableCourses =
+        courseLists prog =
+            Maybe.andThen (\p -> Dict.get p specializations) prog
+                |> Maybe.map Dict.values
+                |> Maybe.withDefault ([ Dict.keys courses ])
+
+        courseFilter list =
             (if ceqOnly then
                 (hasCeqFilter << queriedFilter)
              else
                 queriedFilter
             )
-                courses
+                (List.filterMap (\k -> Dict.get k courses) list)
+
+        tableFromList list =
+            Table.view config tableState list
     in
         div []
-            [ Html.node "link" [ Html.Attributes.rel "stylesheet", Html.Attributes.href "style.css" ] []
-            , h1 [] [ text "Courses" ]
-            , fieldset []
+            ([ Html.node "link" [ Html.Attributes.rel "stylesheet", Html.Attributes.href "style.css" ] []
+             , h1 [] [ text "Courses" ]
+             , fieldset []
                 [ input [ placeholder "Filter by Name or Code", onInput SetQuery ] []
+                , label []
+                    [ text "Program: "
+                    , select [ onInput SetProgram ] <| List.concat [ [ option [ value "" ] [ text "all" ] ], List.map (\prog -> option [ value prog ] [ text prog ]) (Dict.keys specializations) ]
+                    ]
                 , label []
                     [ input [ type_ "checkbox", onClick ToggleCeqOnly, checked ceqOnly ] []
                     , text "Only show courses with at least 3 CEQ answers"
                     ]
                 ]
-            , Table.view config tableState acceptableCourses
-            ]
+             ]
+                ++ (List.map tableFromList (List.map courseFilter (courseLists program)))
+            )
 
 
 defaultEntry : Maybe String -> String
@@ -119,12 +147,7 @@ ceqLink code ceqlink =
             lnk
 
         Nothing ->
-            case code of
-                Just c ->
-                    "http://www.ceq.lth.se/rapporter/?kurskod=" ++ c ++ "&lang=en"
-
-                Nothing ->
-                    "http://www.ceq.lth.se/rapporter/?lang=en"
+            "http://www.ceq.lth.se/rapporter/?kurskod=" ++ code ++ "&lang=en"
 
 
 defaultCustomizations =
@@ -177,10 +200,10 @@ coloredSymbol color symbol =
 config : Table.Config Course Msg
 config =
     Table.customConfig
-        { toId = Maybe.withDefault "-" << .code
+        { toId = .code
         , toMsg = SetTableState
         , columns =
-            [ maybeStringColumn "Course Code" .code
+            [ Table.stringColumn "Course Code" .code
             , maybeFloatColumn "Credits" .credits
             , maybeStringColumn "Cycle" (Maybe.andThen (toEnum cycles) << .cycle)
             , maybeStringColumn "Course Name" .name

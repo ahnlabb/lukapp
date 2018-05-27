@@ -2,16 +2,13 @@
 
 page: index.html
 
-site/Specializations.elm: site/generate.py site/Specializations.template.elm lot.db
-	python3 site/generate.py ./lot.db ./site/TableData.template.elm -o ./site/TableData.elm
+site/SiteData.elm: site/generate.py site/SiteData.template.elm lot.db
+	python3 site/generate.py ./lot.db ./site/SiteData.template.elm -o ./site/SiteData.elm
 
-site/TableData.elm: site/generate.py site/TableData.template.elm lot.db
-	python3 site/generate.py ./lot.db ./site/TableData.template.elm -o ./site/TableData.elm
-
-index.html: site/TableData.elm site/Specializations.elm
+index.html: site/SiteData.elm
 	(cd site && elm make Main.elm --output ../index.html)
 
-reactor: site/Main.elm site/TableData.elm site/Specializations.elm
+reactor: site/Main.elm site/SiteData.elm
 	(cd site && elm reactor)
 
 lot.db:

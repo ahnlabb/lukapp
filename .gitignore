@@ -2,5 +2,4 @@ cache/
 .mypy_cache/
 *.db
 elm-stuff
-TableData.elm
-Specializations.elm
+SiteData.elm

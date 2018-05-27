@@ -10,3 +10,9 @@ h2,
 h3 {
   line-height: 1;
 }
+table {
+    width: 80%;
+}
+.long {
+    width: 30%;
+}

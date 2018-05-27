@@ -1,7 +1,7 @@
 module Main exposing (..)
 
 import Html exposing (Html, div, h1, input, text, select, option, a, fieldset, label)
-import Html.Attributes exposing (placeholder, value, href, style, width, type_, checked)
+import Html.Attributes exposing (placeholder, value, href, style, width, type_, checked, class)
 import Html.Events exposing (onInput, onClick)
 import Dict
 import Table
@@ -206,7 +206,7 @@ config =
             [ Table.stringColumn "Course Code" .code
             , maybeFloatColumn "Credits" .credits
             , maybeStringColumn "Cycle" (Maybe.andThen (toEnum cycles) << .cycle)
-            , maybeStringColumn "Course Name" .name
+            , longStringColumn "Course Name" .name
             , maybeLinkColumn "Webpage" (\data -> Maybe.map (SimpleLink "link") (.webpage data))
             , linkColumn "CEQ" (\data -> SimpleLink "link" (ceqLink (.code data) (.ceqUrl data)))
             , maybeIntColumn "Pass Rate (%)" .pass
@@ -248,6 +248,13 @@ maybeFloatColumn name toMaybeFloat =
         , sorter = Table.increasingOrDecreasingBy (Maybe.withDefault -1.0 << toMaybeFloat)
         }
 
+longStringColumn : String -> (data -> Maybe String) -> Table.Column data msg
+longStringColumn name toStr =
+    Table.veryCustomColumn
+        { name = name
+        , viewData = \data -> Table.HtmlDetails [class "long"] [ text ((Maybe.withDefault "" << toStr) data) ]
+        , sorter = Table.increasingOrDecreasingBy (Maybe.withDefault "" << toStr)
+        }
 
 maybeStringColumn : String -> (data -> Maybe String) -> Table.Column data msg
 maybeStringColumn name toMaybeString =

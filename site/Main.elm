@@ -1,6 +1,6 @@
 module Main exposing (..)
 
-import Html exposing (Html, div, h1, input, text, select, option, a, fieldset, label)
+import Html exposing (Html, div, h1, h3, input, text, select, option, a, fieldset, label)
 import Html.Attributes exposing (placeholder, value, href, style, width, type_, checked, class)
 import Html.Events exposing (onInput, onClick)
 import Dict
@@ -32,7 +32,7 @@ init courses =
         model =
             { courses = courses
             , tableState = Table.initialSort "Course Code"
-            , ceqOnly = True
+            , ceqOnly = False
             , query = ""
             , program = Nothing
             }
@@ -94,8 +94,8 @@ view { courses, tableState, ceqOnly, query, program } =
 
         courseLists prog =
             Maybe.andThen (\p -> Dict.get p specializations) prog
-                |> Maybe.map Dict.values
-                |> Maybe.withDefault ([ Dict.keys courses ])
+                |> Maybe.map Dict.toList
+                |> Maybe.withDefault ([ ( "All Courses", Dict.keys courses ) ])
 
         courseFilter list =
             (if ceqOnly then
@@ -106,7 +106,10 @@ view { courses, tableState, ceqOnly, query, program } =
                 (List.filterMap (\k -> Dict.get k courses) list)
 
         tableFromList list =
-            Table.view config tableState list
+            div []
+                [ h3 [] [ text (Tuple.first list) ]
+                , Table.view config tableState (Tuple.second list)
+                ]
     in
         div []
             ([ Html.node "link" [ Html.Attributes.rel "stylesheet", Html.Attributes.href "style.css" ] []
@@ -123,7 +126,7 @@ view { courses, tableState, ceqOnly, query, program } =
                     ]
                 ]
              ]
-                ++ (List.map tableFromList (List.map courseFilter (courseLists program)))
+                ++ (List.map tableFromList (List.map (Tuple.mapSecond courseFilter) (courseLists program)))
             )
 
 
@@ -132,6 +135,7 @@ defaultEntry =
     Maybe.withDefault "-"
 
 
+switchMaybe : a -> a -> Maybe b -> a
 switchMaybe ifJust ifNothing test =
     case test of
         Just _ ->
@@ -141,6 +145,7 @@ switchMaybe ifJust ifNothing test =
             ifNothing
 
 
+ceqLink : String -> Maybe String -> String
 ceqLink code ceqlink =
     case ceqlink of
         Just lnk ->
@@ -231,37 +236,41 @@ toEnum lst num =
     List.head <| List.drop (num - 1) lst
 
 
-maybeIntColumn : String -> (data -> Maybe Int) -> Table.Column data msg
-maybeIntColumn name toMaybeInt =
+customMaybeColumn : (Maybe comparable -> String) -> comparable -> String -> (data -> Maybe comparable) -> Table.Column data msg
+customMaybeColumn toStr valueDefault name toMaybe =
     Table.customColumn
         { name = name
-        , viewData = defaultEntry << Maybe.map toString << toMaybeInt
-        , sorter = Table.increasingOrDecreasingBy (Maybe.withDefault -1000 << toMaybeInt)
+        , viewData = toStr << toMaybe
+        , sorter = Table.increasingOrDecreasingBy (Maybe.withDefault valueDefault << toMaybe)
         }
+
+
+maybeColumn : comparable -> String -> (data -> Maybe comparable) -> Table.Column data msg
+maybeColumn =
+    customMaybeColumn ((Maybe.withDefault "-") << (Maybe.map toString))
+
+
+maybeIntColumn : String -> (data -> Maybe Int) -> Table.Column data msg
+maybeIntColumn =
+    maybeColumn -101
 
 
 maybeFloatColumn : String -> (data -> Maybe Float) -> Table.Column data msg
-maybeFloatColumn name toMaybeFloat =
-    Table.customColumn
-        { name = name
-        , viewData = defaultEntry << Maybe.map toString << toMaybeFloat
-        , sorter = Table.increasingOrDecreasingBy (Maybe.withDefault -1.0 << toMaybeFloat)
-        }
+maybeFloatColumn =
+    maybeColumn -1.0
+
+
+maybeStringColumn : String -> (data -> Maybe String) -> Table.Column data msg
+maybeStringColumn =
+    customMaybeColumn (Maybe.withDefault "-") ""
+
 
 longStringColumn : String -> (data -> Maybe String) -> Table.Column data msg
 longStringColumn name toStr =
     Table.veryCustomColumn
         { name = name
-        , viewData = \data -> Table.HtmlDetails [class "long"] [ text ((Maybe.withDefault "" << toStr) data) ]
+        , viewData = \data -> Table.HtmlDetails [ class "long" ] [ text ((Maybe.withDefault "" << toStr) data) ]
         , sorter = Table.increasingOrDecreasingBy (Maybe.withDefault "" << toStr)
-        }
-
-maybeStringColumn : String -> (data -> Maybe String) -> Table.Column data msg
-maybeStringColumn name toMaybeString =
-    Table.customColumn
-        { name = name
-        , viewData = defaultEntry << toMaybeString
-        , sorter = Table.increasingOrDecreasingBy (Maybe.withDefault "" << toMaybeString)
         }
 
 
@@ -286,6 +295,7 @@ linkColumn name toLink =
         }
 
 
+viewMaybeLink : Maybe SimpleLink -> Table.HtmlDetails msg
 viewMaybeLink maybeLink =
     case maybeLink of
         Just x ->

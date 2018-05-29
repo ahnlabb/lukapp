@@ -229,7 +229,9 @@ class CourseList():
 
                     except (ValueError, KeyError):
                         log.debug(f"failed to process field: {h:<15} on course: {name:<6} {prog:<8}")
-            if course_type:
+            if spec_name:
+                if not course_type:
+                    course_type = ""
                 self.specializations[prog].append((course_type, spec_name, course_names))
 
 

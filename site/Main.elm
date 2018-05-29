@@ -94,7 +94,7 @@ view { courses, tableState, ceqOnly, query, program } =
 
         courseLists prog =
             Maybe.andThen (\p -> Dict.get p specializations) prog
-                |> Maybe.map Dict.toList
+                |> Maybe.map (List.map (\spec -> ( spec.name, spec.courselist )))
                 |> Maybe.withDefault ([ ( "All Courses", Dict.keys courses ) ])
 
         courseFilter list =

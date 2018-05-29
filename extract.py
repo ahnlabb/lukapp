@@ -173,7 +173,7 @@ class CourseList():
         self.fields = dict()
         self.courses = defaultdict(dict)
         self.conflicts = []
-        self.specializations = defaultdict(lambda: defaultdict(set))
+        self.specializations = defaultdict(lambda: list())
 
     def set(self, course, key, value):
         row = self.courses[course]
@@ -191,7 +191,9 @@ class CourseList():
 
     def process_prog(self, soup, prog):
         for course_lst in soup.find_all('table', class_='CourseListView'):
-            course_type = course_lst.parent.previous_sibling.previous_sibling.get('id')
+            section_title = course_lst.parent.previous_sibling.previous_sibling
+            course_type = section_title.get('id')
+            spec_name = section_title.string
 
             header = _process_header(course_lst.thead)
 
@@ -204,11 +206,11 @@ class CourseList():
 
             index_column = header.index(index)
 
+            course_names = []
             for tr in course_lst.tbody.find_all('tr'):
                 row = tr.find_all('td')
                 name = parse_field(index, row[index_column])
-                if course_type:
-                    self.specializations[prog][course_type].add(name)
+                course_names.append(name)
                 for h, r in zip(header, chain(row, addition)):
                     try:
                         val = parse_field(h, r)
@@ -227,6 +229,8 @@ class CourseList():
 
                     except (ValueError, KeyError):
                         log.debug(f"failed to process field: {h:<15} on course: {name:<6} {prog:<8}")
+            if course_type:
+                self.specializations[prog].append((course_type, spec_name, course_names))
 
 
 def _build_courselist():
@@ -282,7 +286,7 @@ def _create_specializations_table(courses, conn):
 
     c.executemany(
         'INSERT INTO specializations VALUES (?,?)',
-        ((k, json.dumps({key: list(courseset) for key, courseset in v.items()})) for k, v in courses.specializations.items())
+        ((k, json.dumps(v)) for k, v in courses.specializations.items())
     )
 
     conn.commit()

@@ -1,9 +1,16 @@
 module SiteData exposing (Course, courses, specializations)
 
 import Dict
-import Json.Decode exposing (decodeString, dict, list, string)
+import Json.Decode exposing (decodeString, dict, list, string, map3, index)
 import Csv.Decode exposing (andMap, field, map, maybe, decodeCsv)
 import Csv exposing (parse)
+
+
+type alias Specialization =
+    { id : String
+    , name : String
+    , courselist : List String
+    }
 
 
 type alias Course =
@@ -69,8 +76,12 @@ specializations =
     Result.withDefault Dict.empty <| specDecode specData
 
 
+specTupleDecoder =
+    map3 Specialization (index 0 string) (index 1 string) (index 2 (list string))
+
+
 specDecode =
-    decodeString <| dict <| dict <| list <| string
+    decodeString (dict (list specTupleDecoder))
 
 
 specData =

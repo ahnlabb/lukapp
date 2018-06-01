@@ -5,6 +5,8 @@ import Page.CourseTable as CourseTable
 import Html exposing (Html, div, h1, h3, input, text, select, option, a, fieldset, label, button, span)
 import Html.Attributes exposing (placeholder, value, href, style, width, type_, checked, class)
 import Html.Events exposing (onInput, onClick)
+import SiteData exposing (specializations)
+import Dict
 
 
 main =
@@ -71,7 +73,7 @@ view { page } =
         Home ->
             div [ class "row" ]
                 ([ Html.node "link" [ Html.Attributes.rel "stylesheet", Html.Attributes.href "style.css" ] []
-                 , colMd [] (List.map (\prog -> button [ onClick (OpenCourseTable prog) ] [ text prog ]) [ "A", "D", "F" ])
+                 , colMd [] (List.map (\prog -> button [ onClick (OpenCourseTable prog) ] [ text prog ]) (Dict.keys specializations))
                  , colMd [] [ about ]
                  ]
                 )

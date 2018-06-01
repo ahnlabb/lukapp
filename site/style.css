@@ -1,9 +1,14 @@
+main {
+    flex: 1;
+}
 body {
   margin: 40px auto;
   line-height: 1.6;
   font-size: 1.2em;
   color: #444;
   padding: 0 10px;
+  display: flex;
+  flex-direction: column;
 }
 h1,
 h2,
@@ -34,6 +39,11 @@ table {
     width: 100%;
   }
 }
+.row:after {
+    content: "";
+    display: table;
+    clear: both;
+}
 .landing-button {
   width: 96%;
   font-size: 1.2em;
@@ -58,4 +68,12 @@ table {
   margin: 7%;
   margin: 4px 2px;
   font-size: 1.3em;
+}
+.small-item {
+    font-size: medium;
+}
+footer{
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }

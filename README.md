@@ -1,4 +1,4 @@
-# lot-extract
+# lukapp
 
 This is an application for fetching data from the LTH
 [Curricula and Time Tables](https://kurser.lth.se/lot/?val=program) and
@@ -7,7 +7,7 @@ This is an application for fetching data from the LTH
 This database is then used to build a static single page application for faster
 and more flexible filtering, sorting and course comparison.
 
-See this application in action [here](https://ahnlabb.github.io/lot-extract/).
+See this application in action [here](https://ahnlabb.github.io/lukapp/).
 
 ## Usage
 

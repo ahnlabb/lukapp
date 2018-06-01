@@ -69,16 +69,21 @@ view : Model -> Html Msg
 view { page } =
     case page of
         Home ->
-            div []
+            div [ class "row" ]
                 ([ Html.node "link" [ Html.Attributes.rel "stylesheet", Html.Attributes.href "style.css" ] []
-                 , about
+                 , colMd [] (List.map (\prog -> button [ onClick (OpenCourseTable prog) ] [ text prog ]) [ "A", "D", "F" ])
+                 , colMd [] [ about ]
                  ]
-                    ++ (List.map (\prog -> button [ onClick (OpenCourseTable prog) ] [ text prog ]) [ "A", "D", "F" ])
                 )
 
         CourseTable subModel ->
             CourseTable.view subModel
                 |> Html.map CourseTableMsg
+
+
+colMd : List (Html.Attribute msg) -> List (Html.Html msg) -> Html.Html msg
+colMd attr =
+    div ([ class "col" ] ++ attr)
 
 
 about : Html.Html msg

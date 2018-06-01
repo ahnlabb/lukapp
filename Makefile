@@ -10,7 +10,7 @@ style.css: site/style.css
 site/SiteData.elm: site/generate.py site/SiteData.template.elm lot.db
 	python3 site/generate.py ./lot.db ./site/SiteData.template.elm -o ./site/SiteData.elm
 
-index.html: site/SiteData.elm
+index.html: site/SiteData.elm site/Main.elm
 	cd site && \
 		elm package install && \
 		elm make Main.elm --output ../index.html

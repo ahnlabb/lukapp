@@ -4,7 +4,7 @@ node_modules/
 *.db
 elm-stuff
 SiteData.elm
-index.html
+./index.html
 app.js
 style.css
 yarn.lock

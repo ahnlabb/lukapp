@@ -26,11 +26,36 @@ table {
   font-size: 1.2em;
 }
 .col {
-    width: 50%;
-    float: left;
+  width: 50%;
+  float: left;
 }
 @media screen and (max-width: 600px) {
-    .col {
-        width: 100%;
-    }
+  .col {
+    width: 100%;
+  }
+}
+.landing-button {
+  width: 96%;
+  font-size: 1.2em;
+  border: none;
+  cursor: pointer;
+
+  background-color: white;
+  color: black;
+  border: 2px solid #555;
+  margin: 4px 2%;
+  -webkit-transition-duration: 0.4s;
+  transition-duration: 0.4s;
+}
+.landing-button:hover {
+  background-color: #555555;
+  color: white;
+}
+.program-button {
+  width: 46%;
+}
+.about {
+  margin: 7%;
+  margin: 4px 2px;
+  font-size: 1.3em;
 }

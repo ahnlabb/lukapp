@@ -73,7 +73,10 @@ view { page } =
         Home ->
             div [ class "row" ]
                 ([ Html.node "link" [ Html.Attributes.rel "stylesheet", Html.Attributes.href "style.css" ] []
-                 , colMd [] (List.map (\prog -> button [ onClick (OpenCourseTable prog) ] [ text prog ]) (Dict.keys specializations))
+                 , colMd []
+                    ([ button [ class "landing-button", onClick (OpenCourseTable "") ] [ text "All Courses" ] ]
+                        ++ (List.map (\prog -> button [ class "landing-button", class "program-button", onClick (OpenCourseTable prog) ] [ text prog ]) (Dict.keys specializations))
+                    )
                  , colMd [] [ about ]
                  ]
                 )

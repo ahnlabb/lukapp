@@ -25,3 +25,12 @@ table {
   text-align: left;
   font-size: 1.2em;
 }
+.col {
+    width: 50%;
+    float: left;
+}
+@media screen and (max-width: 600px) {
+    .col {
+        width: 100%;
+    }
+}

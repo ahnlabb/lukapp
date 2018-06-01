@@ -94,12 +94,13 @@ colMd attr =
 about : Html.Html msg
 about =
     Markdown.toHtml [ class "about" ] """
-Frustrated with the slow webpage that displays course information in LTH's
-programmes and the inaccesibility of CEQ-reports, we decided to make a tool
-ourselves. With this tool you can view all of LTH's courses. Sort them by
-ceq-score and pass rate, and filter by course code or name. We hope this tool
-will make it easier for students to pick courses, expand the exposure of the
-ceq-reports and encourage more students to fill in the forms.
+## lukapp
+- View all of LTH's courses
+- Sort them by CEQ-score and pass rate
+- Filter by course code or name
+
+This tool will make it easier for students to pick courses,
+create exposure for the CEQ-reports and encourage more students to fill out the forms.
 
 The code is open source and lives at
 [github](https://github.com/ahnlabb/lot-extract). Please add feature requests as

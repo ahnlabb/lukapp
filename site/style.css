@@ -11,8 +11,17 @@ h3 {
   line-height: 1;
 }
 table {
-    width: 80%;
+  width: 80%;
 }
 .long {
-    width: 30%;
+  width: 30%;
+}
+.accordion {
+  background-color: #eee;
+  border: none;
+  outline: none;
+  width: 80%;
+  cursor: pointer;
+  text-align: left;
+  font-size: 1.2em;
 }

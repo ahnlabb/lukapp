@@ -330,7 +330,7 @@ def _add_column_if_absent(cursor, colname, affinity):
         cursor.execute(f'ALTER TABLE courses ADD COLUMN {colname} {affinity}')
 
 
-def _get_latest_ceq(code, sp):
+def _get_latest_ceq(code, sp, oldcoursecode=None):
     allsp = chain([sp], set(range(1, 5)) - {sp})
     for testsp in allsp:
         for year in range(2018, 2014, -1):
@@ -339,6 +339,11 @@ def _get_latest_ceq(code, sp):
             except HTTPError:
                 log.debug(f'request failed for course: {code}, year: {year}, sp: {testsp}')
                 pass
+    # LTH changed course codes recently, so some courses have no ceq reports yet.
+    # If we don't find a ceq report we try to fetch an old one.
+    if oldcoursecode and code in oldcoursecode:
+        return _get_latest_ceq(oldcoursecode[code], sp)
+
     return None, None
 
 
@@ -351,6 +356,16 @@ def _update_courses(coursedict, columns, cursor):
 def _ceq():
     def tablevalue(soup, rowname):
         return soup.find(string=rowname).parent.find_next_sibling('td').string
+
+    # Mapping from new to old course codes.
+    oldcoursecodes = {}
+    try:
+        with open('coursecodes.csv', 'r') as f:
+            for l in f.read().strip().split('\n')[1:]:
+                old, new = l.split(',')
+                oldcoursecodes[new] = old
+    except _: 
+        pass
 
     c = conn.cursor()
     ceq_columns = [
@@ -373,7 +388,7 @@ def _ceq():
     for code, *sp in query:
         try:
             last, _ = next(filter(lambda x: x[1], enumerate(sp[::-1])))
-            soup, url = _get_latest_ceq(code, 4 - last)
+            soup, url = _get_latest_ceq(code, 4 - last, oldcoursecodes)
             if soup:
                 passed = tablevalue(soup, re.compile('Number and share of passed students.*'))
                 pass_share = int(match(r'\d+\s*/\s*(\d+)\s*%', passed)[1])

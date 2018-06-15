@@ -6,6 +6,7 @@ import json
 from collections import defaultdict
 from re import sub, match
 import re
+import asyncio
 from urllib.parse import urlparse
 from urllib.error import HTTPError
 from argparse import ArgumentParser
@@ -13,6 +14,7 @@ from pathlib import Path
 from itertools import chain
 from enum import Enum
 from bs4 import BeautifulSoup
+import aiohttp
 
 
 base_url = "https://kurser.lth.se/lot/?"
@@ -301,18 +303,6 @@ def _create():
     conn.close()
 
 
-def _ceq_get_query(code, year, sp):
-    semester = 'HT'
-    if sp > 2:
-        semester = 'VT'
-        sp -= 2
-
-    url = f'http://www.ceq.lth.se/rapporter/{year}_{semester}/LP{sp}/{code}_{year}_{semester}_LP{sp}_slutrapport_en.html'
-    log.debug(f'requesting url: {url}')
-    with urllib.request.urlopen(url) as req:
-        return BeautifulSoup(req.read(), 'html.parser'), url
-
-
 def _table_info():
     c = conn.cursor()
     query = c.execute('PRAGMA table_info(courses)')
@@ -330,15 +320,32 @@ def _add_column_if_absent(cursor, colname, affinity):
         cursor.execute(f'ALTER TABLE courses ADD COLUMN {colname} {affinity}')
 
 
+async def _ceq_get_query(code, year, sp):
+    semester = 'HT'
+    if sp > 2:
+        semester = 'VT'
+        sp -= 2
+
+    url = f'http://www.ceq.lth.se/rapporter/{year}_{semester}/LP{sp}/{code}_{year}_{semester}_LP{sp}_slutrapport_en.html'
+    log.debug(f'requesting url: {url}')
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            return resp.status, await resp.read(), resp.url
+
+
 def _get_latest_ceq(code, sp, oldcoursecode=None):
     allsp = chain([sp], set(range(1, 5)) - {sp})
+    loop = asyncio.get_event_loop()
+    tasks = []
     for testsp in allsp:
         for year in range(2018, 2014, -1):
-            try:
-                return _ceq_get_query(code, year, testsp)
-            except HTTPError:
-                log.debug(f'request failed for course: {code}, year: {year}, sp: {testsp}')
-                pass
+            tasks.append(_ceq_get_query(code, year, testsp))
+    getall = asyncio.gather(*tasks)
+    loop.run_until_complete(getall)
+    ok = filter(lambda r: r[0] == 200, getall.result())
+    if ok:
+        _, text, url = next(ok)
+        return BeautifulSoup(text, 'html.parser'), url
     # LTH changed course codes recently, so some courses have no ceq reports yet.
     # If we don't find a ceq report we try to fetch an old one.
     if oldcoursecode and code in oldcoursecode:
@@ -358,14 +365,11 @@ def _ceq():
         return soup.find(string=rowname).parent.find_next_sibling('td').string
 
     # Mapping from new to old course codes.
-    oldcoursecodes = {}
-    try:
-        with open('coursecodes.csv', 'r') as f:
-            for l in f.read().strip().split('\n')[1:]:
-                old, new = l.split(',')
-                oldcoursecodes[new] = old
-    except _: 
-        pass
+    oldcoursecodes = dict()
+    with open('coursecodes.csv', 'r') as f:
+        for l in f:
+            old, new = l.split(',')
+            oldcoursecodes[new] = old
 
     c = conn.cursor()
     ceq_columns = [
@@ -411,8 +415,8 @@ def _ceq():
         except StopIteration:
             log.debug(f'Course {code} lacks sp data')
 
-    log.debug(f'No. courses with a complete CEQ: {len(courses_complete)}')
-    log.debug(f'No. courses with a basic CEQ: {len(courses_basic)}')
+    log.info(f'No. courses with a complete CEQ: {len(courses_complete)}')
+    log.info(f'No. courses with a basic CEQ: {len(courses_basic)}')
     _update_courses(courses_complete, ceq_columns, c)
     _update_courses(courses_basic, ceq_columns[0:2], c)
 

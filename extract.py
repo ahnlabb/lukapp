@@ -338,12 +338,13 @@ async def _get_latest_ceq(code, sp, oldcoursecode=None):
         for year in range(2018, 2014, -1):
             status, resp, url = await _ceq_get_query(code, year, testsp)
             if status == 200:
-                return BeautifulSoup(resp, 'html.parser'), url
+                soup = BeautifulSoup(resp, 'html.parser')
+                return soup, url
 
     # LTH changed course codes recently, so some courses have no ceq reports yet.
     # If we don't find a ceq report we try to fetch an old one.
     if oldcoursecode and code in oldcoursecode:
-        return _get_latest_ceq(oldcoursecode[code], sp)
+        return await _get_latest_ceq(oldcoursecode[code], sp)
 
     return None, None
 
@@ -362,7 +363,7 @@ def _ceq():
     oldcoursecodes = dict()
     with open('coursecodes.csv', 'r') as f:
         for l in f:
-            old, new = l.split(',')
+            old, new = l.strip().split(',')
             oldcoursecodes[new] = old
 
     c = conn.cursor()
@@ -414,7 +415,7 @@ def _ceq():
     loop = asyncio.get_event_loop()
 
     ceq_tasks = [process_ceq(code, sp) for code, *sp in query]
-    chunk_size = 10
+    chunk_size = 50
     task_groups = [ceq_tasks[i:i + chunk_size] for i in range(0, len(ceq_tasks), chunk_size)]
     for group in task_groups:
         getall = asyncio.gather(*group)

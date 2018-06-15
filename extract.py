@@ -8,10 +8,9 @@ from re import sub, match
 import re
 import asyncio
 from urllib.parse import urlparse
-from urllib.error import HTTPError
 from argparse import ArgumentParser
 from pathlib import Path
-from itertools import chain
+from itertools import chain, islice
 from enum import Enum
 from bs4 import BeautifulSoup
 import aiohttp
@@ -330,22 +329,17 @@ async def _ceq_get_query(code, year, sp):
     log.debug(f'requesting url: {url}')
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as resp:
-            return resp.status, await resp.read(), resp.url
+            return resp.status, await resp.read(), str(resp.url)
 
 
-def _get_latest_ceq(code, sp, oldcoursecode=None):
+async def _get_latest_ceq(code, sp, oldcoursecode=None):
     allsp = chain([sp], set(range(1, 5)) - {sp})
-    loop = asyncio.get_event_loop()
-    tasks = []
     for testsp in allsp:
         for year in range(2018, 2014, -1):
-            tasks.append(_ceq_get_query(code, year, testsp))
-    getall = asyncio.gather(*tasks)
-    loop.run_until_complete(getall)
-    ok = filter(lambda r: r[0] == 200, getall.result())
-    if ok:
-        _, text, url = next(ok)
-        return BeautifulSoup(text, 'html.parser'), url
+            status, resp, url = await _ceq_get_query(code, year, testsp)
+            if status == 200:
+                return BeautifulSoup(resp, 'html.parser'), url
+
     # LTH changed course codes recently, so some courses have no ceq reports yet.
     # If we don't find a ceq report we try to fetch an old one.
     if oldcoursecode and code in oldcoursecode:
@@ -389,31 +383,47 @@ def _ceq():
     query = c.execute('SELECT course_code, sp1_lectures, sp2_lectures, sp3_lectures, sp4_lectures FROM courses')
     courses_complete = dict()  # Complete CEQ containing scores
     courses_basic = dict()  # Basic CEQ e.g. containing share of student that passed
-    for code, *sp in query:
+
+    async def process_ceq(code, sp):
         try:
             last, _ = next(filter(lambda x: x[1], enumerate(sp[::-1])))
-            soup, url = _get_latest_ceq(code, 4 - last, oldcoursecodes)
-            if soup:
-                passed = tablevalue(soup, re.compile('Number and share of passed students.*'))
-                pass_share = int(match(r'\d+\s*/\s*(\d+)\s*%', passed)[1])
-                try:
-                    answer_field = tablevalue(soup, 'Number answers and response rate')
-                    answers = int(match(r'(\d+)\s*/\s*\d+\s*%', answer_field)[1])
-                    overall_score = int(tablevalue(soup, 'Overall, I am satisfied with this course'))
-                    important = int(tablevalue(soup, 'The course seems important for my education'))
-                    good_teaching = int(tablevalue(soup, 'Good Teaching'))
-                    clear_goals = int(tablevalue(soup, 'Clear Goals and Standards'))
-                    assessment = int(tablevalue(soup, 'Appropriate Assessment'))
-                    workload = int(tablevalue(soup, 'Appropriate Workload'))
-                    courses_complete[code] = (url, pass_share, answers, overall_score, important, good_teaching, clear_goals, assessment, workload)
-                except AttributeError:
-                    courses_basic[code] = (url, pass_share)
-                except TypeError:
-                    courses_basic[code] = (url, pass_share)
-            else:
-                log.debug(f'No CEQ found for {code} SP{last}')
         except StopIteration:
             log.debug(f'Course {code} lacks sp data')
+            return
+        soup, url = await _get_latest_ceq(code, 4 - last, oldcoursecodes)
+        if soup:
+            passed = tablevalue(soup, re.compile('Number and share of passed students.*'))
+            pass_share = int(match(r'\d+\s*/\s*(\d+)\s*%', passed)[1])
+            try:
+                answer_field = tablevalue(soup, 'Number answers and response rate')
+                answers = int(match(r'(\d+)\s*/\s*\d+\s*%', answer_field)[1])
+                overall_score = int(tablevalue(soup, 'Overall, I am satisfied with this course'))
+                important = int(tablevalue(soup, 'The course seems important for my education'))
+                good_teaching = int(tablevalue(soup, 'Good Teaching'))
+                clear_goals = int(tablevalue(soup, 'Clear Goals and Standards'))
+                assessment = int(tablevalue(soup, 'Appropriate Assessment'))
+                workload = int(tablevalue(soup, 'Appropriate Workload'))
+                return code, (url, pass_share, answers, overall_score, important, good_teaching, clear_goals, assessment, workload)
+            except AttributeError:
+                return code, (url, pass_share)
+            except TypeError:
+                return code, (url, pass_share)
+        else:
+            log.debug(f'No CEQ found for {code} SP{last}')
+
+    loop = asyncio.get_event_loop()
+
+    ceq_tasks = [process_ceq(code, sp) for code, *sp in query]
+    chunk_size = 10
+    task_groups = [ceq_tasks[i:i + chunk_size] for i in range(0, len(ceq_tasks), chunk_size)]
+    for group in task_groups:
+        getall = asyncio.gather(*group)
+        loop.run_until_complete(getall)
+        for code, ceq_data in filter(None, getall.result()):
+            if len(ceq_data) == len(ceq_columns):
+                courses_complete[code] = ceq_data
+            else:
+                courses_basic[code] = ceq_data
 
     log.info(f'No. courses with a complete CEQ: {len(courses_complete)}')
     log.info(f'No. courses with a basic CEQ: {len(courses_basic)}')

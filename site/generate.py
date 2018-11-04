@@ -29,7 +29,7 @@ def _write_all(out, template):
 
 
 def _process_specializations(query):
-    return json.dumps({k: json.loads(v) for k, v in query}, indent=4)
+    return json.dumps({code: [name, json.loads(courses)] for code, name, courses in query}, indent=4)
 
 
 def _query_to_csv(header, query):

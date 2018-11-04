@@ -80,7 +80,7 @@ view { page } =
                     , div [ class "row" ]
                         ([ colMd []
                             ([ button [ class "landing-button", onClick (OpenCourseTable "") ] [ text "All Courses" ] ]
-                                ++ (List.map (\prog -> button [ class "landing-button", class "program-button", onClick (OpenCourseTable prog) ] [ text prog ]) (Dict.keys specializations))
+                                ++ (List.map (\( key, prog ) -> button [ class "landing-button", class "program-button", onClick (OpenCourseTable key) ] [ text (prog.name) ]) (Dict.toList specializations))
                             )
                          , colMd [] [ about ]
                          ]

@@ -107,7 +107,7 @@ view { courses, tableState, collapsedTables, ceqOnly, ceqExtended, query, progra
             List.filter <| ((<) 3) << (Maybe.withDefault 0) << .ceqAnswers
 
         courseLists prog =
-            Maybe.andThen (\p -> Dict.get p specializations) prog
+            Maybe.andThen (\p -> Maybe.map .specializations (Dict.get p specializations)) prog
                 |> Maybe.map (List.map (\spec -> ( spec.name, spec.courselist )))
                 |> Maybe.withDefault ([ ( "All Courses", Dict.keys courses ) ])
 

@@ -1,7 +1,7 @@
 module SiteData exposing (Course, courses, specializations)
 
 import Dict
-import Json.Decode exposing (decodeString, dict, list, string, map3, index)
+import Json.Decode exposing (decodeString, dict, list, string, map3, map2, index)
 import Csv.Decode exposing (andMap, field, map, maybe, decodeCsv)
 import Csv exposing (parse)
 
@@ -10,6 +10,12 @@ type alias Specialization =
     { id : String
     , name : String
     , courselist : List String
+    }
+
+
+type alias Program =
+    { name : String
+    , specializations : List Specialization
     }
 
 
@@ -81,7 +87,7 @@ specTupleDecoder =
 
 
 specDecode =
-    decodeString (dict (list specTupleDecoder))
+    decodeString (dict (map2 Program (index 0 string) (index 1 (list specTupleDecoder))))
 
 
 specData =

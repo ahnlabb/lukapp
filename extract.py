@@ -5,15 +5,16 @@ import logging
 import json
 from collections import defaultdict
 from re import sub, match
-import re
-import asyncio
 from urllib.parse import urlparse
 from argparse import ArgumentParser
 from pathlib import Path
-from itertools import chain, islice
+from itertools import chain
 from enum import Enum
+
 from bs4 import BeautifulSoup
-import aiohttp
+
+from ceq import ceq
+from util import table_info
 
 
 base_url = "https://kurser.lth.se/lot/?"
@@ -174,7 +175,13 @@ class CourseList():
         self.fields = dict()
         self.courses = defaultdict(dict)
         self.conflicts = []
-        self.specializations = defaultdict(lambda: list())
+        self.specializations = dict()
+
+    def add_program(self, code, name):
+        self.specializations[code] = (name, list())
+
+    def add_specialization(self, code, spec):
+        self.specializations[code][1].append(spec)
 
     def set(self, course, key, value):
         row = self.courses[course]
@@ -190,7 +197,7 @@ class CourseList():
         for name, fields in self.courses.items():
             yield [fields.get(f, None) for f in self.fields]
 
-    def process_prog(self, soup, prog):
+    def process_prog(self, soup, prog, prog_name):
         for course_lst in soup.find_all('table', class_='CourseListView'):
             section_title = course_lst.parent.previous_sibling.previous_sibling
             course_type = section_title.get('id')
@@ -233,16 +240,19 @@ class CourseList():
             if spec_name:
                 if not course_type:
                     course_type = ""
-                self.specializations[prog].append((course_type, spec_name, course_names))
+                self.add_specialization(prog, (course_type, spec_name, course_names))
 
 
 def _build_courselist():
     courses = CourseList()
     soup = get_query(val='program', lang='en')
     for prog in soup.find_all('input', attrs={'type': 'radio', 'name': 'prog'}):
-        name = prog['value']
-        prog_soup = get_query(val='program', prog=name, lang='en')
-        courses.process_prog(prog_soup, name)
+        code = prog['value']
+        name = prog.parent.get_text()
+        print(name)
+        courses.add_program(code, name)
+        prog_soup = get_query(val='program', prog=code, lang='en')
+        courses.process_prog(prog_soup, code, name)
 
     return courses
 
@@ -285,162 +295,34 @@ def init_log():
 def _create_specializations_table(courses, conn):
     c = conn.cursor()
 
-    c.execute('CREATE TABLE specializations (program TEXT, courses TEXT)')
+    c.execute('CREATE TABLE specializations (program TEXT, name TEXT, courses TEXT)')
 
     c.executemany(
-        'INSERT INTO specializations VALUES (?,?)',
-        ((k, json.dumps(v)) for k, v in courses.specializations.items())
+        'INSERT INTO specializations VALUES (?,?,?)',
+        ((k, name, json.dumps(spec)) for k, (name, spec) in courses.specializations.items())
     )
 
     conn.commit()
 
 
-def _create():
+def _create(conn):
     courses = _build_courselist()
     _create_course_table(courses, conn)
     _create_specializations_table(courses, conn)
     conn.close()
 
 
-def _table_info():
-    c = conn.cursor()
-    query = c.execute('PRAGMA table_info(courses)')
-    _, name, affinity, _, _, _ = map(list, zip(*query))
-    return name, affinity
-
-
-def _table():
-    print(_table_info())
-
-
-def _add_column_if_absent(cursor, colname, affinity):
-    names, affinities = _table_info()
-    if colname not in names:
-        cursor.execute(f'ALTER TABLE courses ADD COLUMN {colname} {affinity}')
-
-
-async def _ceq_get_query(code, year, sp):
-    semester = 'HT'
-    if sp > 2:
-        semester = 'VT'
-        sp -= 2
-
-    url = f'http://www.ceq.lth.se/rapporter/{year}_{semester}/LP{sp}/{code}_{year}_{semester}_LP{sp}_slutrapport_en.html'
-    log.debug(f'requesting url: {url}')
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as resp:
-            return resp.status, await resp.read(), str(resp.url)
-
-
-async def _get_latest_ceq(code, sp, oldcoursecode=None):
-    allsp = chain([sp], set(range(1, 5)) - {sp})
-    for testsp in allsp:
-        for year in range(2018, 2014, -1):
-            status, resp, url = await _ceq_get_query(code, year, testsp)
-            if status == 200:
-                soup = BeautifulSoup(resp, 'html.parser')
-                return soup, url
-
-    # LTH changed course codes recently, so some courses have no ceq reports yet.
-    # If we don't find a ceq report we try to fetch an old one.
-    if oldcoursecode and code in oldcoursecode:
-        return await _get_latest_ceq(oldcoursecode[code], sp)
-
-    return None, None
-
-
-def _update_courses(coursedict, columns, cursor):
-    values = list((*v, k) for k, v in coursedict.items())
-    sql = f"UPDATE courses SET {', '.join(col + ' = ?' for col in columns)} WHERE course_code = ?"
-    cursor.executemany(sql, values)
-
-
-def _ceq():
-    def tablevalue(soup, rowname):
-        return soup.find(string=rowname).parent.find_next_sibling('td').string
-
-    # Mapping from new to old course codes.
-    oldcoursecodes = dict()
-    with open('coursecodes.csv', 'r') as f:
-        for l in f:
-            old, new = l.strip().split(',')
-            oldcoursecodes[new] = old
-
-    c = conn.cursor()
-    ceq_columns = [
-        'ceq_url',
-        'ceq_pass_share',
-        'ceq_answers',
-        'ceq_overall_score',
-        'ceq_important',
-        'ceq_good_teaching',
-        'ceq_clear_goals',
-        'ceq_assessment',
-        'ceq_workload'
-    ]
-    for col in ceq_columns:
-        _add_column_if_absent(c, col, 'INTEGER')
-
-    query = c.execute('SELECT course_code, sp1_lectures, sp2_lectures, sp3_lectures, sp4_lectures FROM courses')
-    courses_complete = dict()  # Complete CEQ containing scores
-    courses_basic = dict()  # Basic CEQ e.g. containing share of student that passed
-
-    async def process_ceq(code, sp):
-        try:
-            last, _ = next(filter(lambda x: x[1], enumerate(sp[::-1])))
-        except StopIteration:
-            log.debug(f'Course {code} lacks sp data')
-            return
-        soup, url = await _get_latest_ceq(code, 4 - last, oldcoursecodes)
-        if soup:
-            passed = tablevalue(soup, re.compile('Number and share of passed students.*'))
-            pass_share = int(match(r'\d+\s*/\s*(\d+)\s*%', passed)[1])
-            try:
-                answer_field = tablevalue(soup, 'Number answers and response rate')
-                answers = int(match(r'(\d+)\s*/\s*\d+\s*%', answer_field)[1])
-                overall_score = int(tablevalue(soup, 'Overall, I am satisfied with this course'))
-                important = int(tablevalue(soup, 'The course seems important for my education'))
-                good_teaching = int(tablevalue(soup, 'Good Teaching'))
-                clear_goals = int(tablevalue(soup, 'Clear Goals and Standards'))
-                assessment = int(tablevalue(soup, 'Appropriate Assessment'))
-                workload = int(tablevalue(soup, 'Appropriate Workload'))
-                return code, (url, pass_share, answers, overall_score, important, good_teaching, clear_goals, assessment, workload)
-            except AttributeError:
-                return code, (url, pass_share)
-            except TypeError:
-                return code, (url, pass_share)
-        else:
-            log.debug(f'No CEQ found for {code} SP{last}')
-
-    loop = asyncio.get_event_loop()
-
-    ceq_tasks = [process_ceq(code, sp) for code, *sp in query]
-    chunk_size = 50
-    task_groups = [ceq_tasks[i:i + chunk_size] for i in range(0, len(ceq_tasks), chunk_size)]
-    for group in task_groups:
-        getall = asyncio.gather(*group)
-        loop.run_until_complete(getall)
-        for code, ceq_data in filter(None, getall.result()):
-            if len(ceq_data) == len(ceq_columns):
-                courses_complete[code] = ceq_data
-            else:
-                courses_basic[code] = ceq_data
-
-    log.info(f'No. courses with a complete CEQ: {len(courses_complete)}')
-    log.info(f'No. courses with a basic CEQ: {len(courses_basic)}')
-    _update_courses(courses_complete, ceq_columns, c)
-    _update_courses(courses_basic, ceq_columns[0:2], c)
-
-    conn.commit()
+def _table(conn):
+    print(table_info(conn.cursor()))
 
 
 if __name__ == '__main__':
     conn = sqlite3.connect('lot.db')
     commands = {
         'create': _create,
-        'ceq': _ceq,
+        'ceq': ceq,
         'table': _table
     }
     args = get_args(commands)
     init_log()
-    commands[args.command]()
+    commands[args.command](conn)

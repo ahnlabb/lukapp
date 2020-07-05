@@ -7,6 +7,7 @@ import csv
 from argparse import ArgumentParser
 from pathlib import Path
 from string import Template
+from collections import defaultdict
 
 log = logging.getLogger(__name__)
 
@@ -25,11 +26,21 @@ def _write_all(out, template):
     query = c.execute(f'SELECT {cols} FROM courses')
     courses = _query_to_csv(cols.split(', '), query)
     specializations = _process_specializations(c.execute('SELECT * FROM specializations'))
-    out.write(template.substitute(courses=courses, specializations=specializations))
+    course_coordinators = _process_coordinator_course(list(c.execute('SELECT * FROM coordinator_course')), c.execute('SELECT * FROM coordinators'))
+    out.write(template.substitute(courses=courses, specializations=specializations, course_coordinators=course_coordinators))
 
 
 def _process_specializations(query):
     return json.dumps({code: [name, json.loads(courses)] for code, name, courses in query}, indent=4)
+
+def _process_coordinator_course(coordinator_course, coordinators):
+    courses = defaultdict(list)
+    coordinator_dict = dict()
+    coordinator_dict.update(coordinators)
+    for coordinator, course in coordinator_course:
+        if coordinator and coordinator in coordinator_dict:
+            courses[course].append(dict(email=coordinator, name=coordinator_dict[coordinator]))
+    return json.dumps(courses, indent=4, ensure_ascii=False)
 
 
 def _query_to_csv(header, query):

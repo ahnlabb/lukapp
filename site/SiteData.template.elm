@@ -1,9 +1,9 @@
-module SiteData exposing (Course, courses, specializations)
+module SiteData exposing (Course, coordinators, courses, specializations)
 
-import Dict
-import Json.Decode exposing (decodeString, dict, list, string, map3, map2, index)
-import Csv.Decode exposing (andMap, field, map, maybe, decodeCsv)
 import Csv exposing (parse)
+import Csv.Decode as CD exposing (andMap, decodeCsv, field, map, maybe)
+import Dict
+import Json.Decode as JD exposing (decodeString, dict, index, list, map2, map3, string)
 
 
 type alias Specialization =
@@ -16,6 +16,12 @@ type alias Specialization =
 type alias Program =
     { name : String
     , specializations : List Specialization
+    }
+
+
+type alias Coordinator =
+    { email : String
+    , name : String
     }
 
 
@@ -46,22 +52,39 @@ decodeSucceed result =
             []
 
 
+parseMaybe parser str =
+    case parser str of
+        Just result ->
+            Ok result
+
+        Nothing ->
+            Err str
+
+
+parseFloat =
+    parseMaybe String.toFloat
+
+
+parseInt =
+    parseMaybe String.toInt
+
+
 decodeCourses =
     map Course
         (field "course_code" Ok
-            |> andMap (field "credits" (maybe String.toFloat))
-            |> andMap (field "cycle" (maybe String.toInt))
+            |> andMap (field "credits" (maybe parseFloat))
+            |> andMap (field "cycle" (maybe parseInt))
             |> andMap (field "course_name" (maybe Ok))
             |> andMap (field "links_W" (maybe Ok))
             |> andMap (field "ceq_url" (maybe Ok))
-            |> andMap (field "ceq_pass_share" (maybe String.toInt))
-            |> andMap (field "ceq_answers" (maybe String.toInt))
-            |> andMap (field "ceq_overall_score" (maybe String.toInt))
-            |> andMap (field "ceq_important" (maybe String.toInt))
-            |> andMap (field "ceq_good_teaching" (maybe String.toInt))
-            |> andMap (field "ceq_clear_goals" (maybe String.toInt))
-            |> andMap (field "ceq_assessment" (maybe String.toInt))
-            |> andMap (field "ceq_workload" (maybe String.toInt))
+            |> andMap (field "ceq_pass_share" (maybe parseInt))
+            |> andMap (field "ceq_answers" (maybe parseInt))
+            |> andMap (field "ceq_overall_score" (maybe parseInt))
+            |> andMap (field "ceq_important" (maybe parseInt))
+            |> andMap (field "ceq_good_teaching" (maybe parseInt))
+            |> andMap (field "ceq_clear_goals" (maybe parseInt))
+            |> andMap (field "ceq_assessment" (maybe parseInt))
+            |> andMap (field "ceq_workload" (maybe parseInt))
         )
 
 
@@ -71,11 +94,6 @@ courses =
         |> decodeSucceed
         |> List.map (\course -> ( course.code, course ))
         |> Dict.fromList
-
-
-courseData : String
-courseData =
-    """$courses"""
 
 
 specializations =
@@ -90,7 +108,24 @@ specDecode =
     decodeString (dict (map2 Program (index 0 string) (index 1 (list specTupleDecoder))))
 
 
+courseCoordinatorDecode =
+    decodeString (dict (list (JD.map2 Coordinator (JD.field "email" string) (JD.field "name" string))))
+
+
+coordinators =
+    Result.withDefault Dict.empty <| courseCoordinatorDecode courseCoordinatorData
+
+
+courseData : String
+courseData =
+    """$courses"""
+
+
 specData =
     """
         $specializations
         """
+
+
+courseCoordinatorData =
+    """$course_coordinators"""

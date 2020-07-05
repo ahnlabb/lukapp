@@ -1,19 +1,20 @@
 module Main exposing (main)
 
+import Browser
+import Dict
+import Html exposing (Html, a, button, div, fieldset, footer, h1, h3, input, label, li, option, select, span, text, ul)
+import Html.Attributes exposing (checked, class, href, placeholder, style, type_, value, width)
+import Html.Events exposing (onClick, onInput)
 import Markdown
 import Page.CourseTable as CourseTable
-import Html exposing (Html, div, h1, h3, input, text, select, option, a, fieldset, label, button, span, ul, li, footer)
-import Html.Attributes exposing (placeholder, value, href, style, width, type_, checked, class)
-import Html.Events exposing (onInput, onClick)
+import SiteData exposing (specializations)
 import Svg
 import Svg.Attributes
-import SiteData exposing (specializations)
-import Dict
 
 
-main : Program Never Model Msg
+main : Program () Model Msg
 main =
-    Html.program
+    Browser.element
         { init = init
         , update = update
         , view = view
@@ -30,18 +31,19 @@ type alias Model =
     { page : Page }
 
 
-init : ( Model, Cmd Msg )
-init =
+init : () -> ( Model, Cmd Msg )
+init flags =
     let
         model =
             { page = Home }
     in
-        ( model, Cmd.none )
+    ( model, Cmd.none )
 
 
 type Msg
     = OpenCourseTable String
     | CourseTableMsg CourseTable.Msg
+    | GoHome
 
 
 updatePage : Page -> Msg -> Model -> ( Model, Cmd Msg )
@@ -52,17 +54,20 @@ updatePage page msg model =
                 ( newModel, newCmd ) =
                     subUpdate subMsg subModel
             in
-                ( { model | page = toModel newModel }, Cmd.map toMsg newCmd )
+            ( { model | page = toModel newModel }, Cmd.map toMsg newCmd )
     in
-        case ( msg, page ) of
-            ( OpenCourseTable prog, Home ) ->
-                ( { model | page = CourseTable (CourseTable.initModel (Just prog)) }, Cmd.none )
+    case ( msg, page ) of
+        ( OpenCourseTable prog, Home ) ->
+            ( { model | page = CourseTable (CourseTable.initModel (Just prog)) }, Cmd.none )
 
-            ( CourseTableMsg subMsg, CourseTable subModel ) ->
-                toPage CourseTable CourseTableMsg CourseTable.update subMsg subModel
+        ( CourseTableMsg subMsg, CourseTable subModel ) ->
+            toPage CourseTable CourseTableMsg CourseTable.update subMsg subModel
 
-            ( _, _ ) ->
-                ( model, Cmd.none )
+        ( GoHome, CourseTable _ ) ->
+            ( { model | page = Home }, Cmd.none )
+
+        ( _, _ ) ->
+            ( model, Cmd.none )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -78,20 +83,22 @@ view { page } =
                 [ Html.main_ [ class "wrapper" ]
                     [ Html.node "link" [ Html.Attributes.rel "stylesheet", Html.Attributes.href "style.css" ] []
                     , div [ class "row" ]
-                        ([ colMd []
+                        [ colMd []
                             ([ button [ class "landing-button", onClick (OpenCourseTable "") ] [ text "All Courses" ] ]
-                                ++ (List.map (\( key, prog ) -> button [ class "landing-button", class "program-button", onClick (OpenCourseTable key) ] [ text (prog.name) ]) (Dict.toList specializations))
+                                ++ List.map (\( key, prog ) -> button [ class "landing-button", class "program-button", onClick (OpenCourseTable key) ] [ text prog.name ]) (Dict.toList specializations)
                             )
-                         , colMd [] [ about ]
-                         ]
-                        )
+                        , colMd [] [ about ]
+                        ]
                     ]
                 , foot
                 ]
 
         CourseTable subModel ->
-            CourseTable.view subModel
-                |> Html.map CourseTableMsg
+            div []
+                [ div [ style "max-width" "150px" ] [ button [ onClick GoHome, class "landing-button" ] [ text "Home" ] ]
+                , CourseTable.view subModel
+                    |> Html.map CourseTableMsg
+                ]
 
 
 colMd : List (Html.Attribute msg) -> List (Html.Html msg) -> Html.Html msg
@@ -135,7 +142,7 @@ type alias Developer =
 
 toHtml : Developer -> Html.Html msg
 toHtml { name, title, username } =
-    ul [ Html.Attributes.style [ ( "list-style-type", "none" ) ] ]
+    ul [ Html.Attributes.style "list-style-type" "none" ]
         [ li [] [ text name ]
         , li [ class "small-item" ] [ text title ]
         , li [ class "small-item" ] [ github username ]

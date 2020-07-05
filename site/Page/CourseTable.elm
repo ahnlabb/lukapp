@@ -1,12 +1,12 @@
 module Page.CourseTable exposing (Model, Msg, initModel, update, view)
 
-import Html exposing (Html, div, h1, h3, input, text, select, option, a, fieldset, label, button, span)
-import Html.Attributes exposing (placeholder, value, href, style, width, type_, checked, class, selected)
-import Html.Events exposing (onInput, onClick)
 import Dict
+import Html exposing (Html, a, button, div, fieldset, h1, h3, input, label, option, select, span, text)
+import Html.Attributes exposing (checked, class, href, placeholder, selected, style, type_, value, width)
+import Html.Events exposing (onClick, onInput)
 import Set
+import SiteData exposing (Course, coordinators, courses, specializations)
 import Table
-import SiteData exposing (specializations, Course, courses)
 
 
 type alias Model =
@@ -16,6 +16,7 @@ type alias Model =
     , ceqOnly : Bool
     , ceqExtended : Bool
     , query : String
+    , coordinatorQuery : String
     , program : Maybe String
     }
 
@@ -30,14 +31,16 @@ initModel program =
             , ceqOnly = False
             , ceqExtended = False
             , query = ""
+            , coordinatorQuery = ""
             , program = program
             }
     in
-        model
+    model
 
 
 type Msg
     = SetQuery String
+    | SetCoordinatorQuery String
     | SetTableState Table.State
     | ToggleCollapse String
     | ToggleCeqOnly
@@ -50,6 +53,11 @@ update msg model =
     case msg of
         SetQuery newQuery ->
             ( { model | query = newQuery }
+            , Cmd.none
+            )
+
+        SetCoordinatorQuery newQuery ->
+            ( { model | coordinatorQuery = newQuery }
             , Cmd.none
             )
 
@@ -73,6 +81,7 @@ update msg model =
                 | program =
                     if newProgram == "" then
                         Nothing
+
                     else
                         Just newProgram
               }
@@ -84,6 +93,7 @@ update msg model =
                 | collapsedTables =
                     if Set.member tableTitle model.collapsedTables then
                         Set.remove tableTitle model.collapsedTables
+
                     else
                         Set.insert tableTitle model.collapsedTables
               }
@@ -92,31 +102,44 @@ update msg model =
 
 
 view : Model -> Html Msg
-view { courses, tableState, collapsedTables, ceqOnly, ceqExtended, query, program } =
+view { courses, tableState, collapsedTables, ceqOnly, ceqExtended, query, coordinatorQuery, program } =
     let
-        lowerQuery =
-            String.toLower query
+        insensitiveContains a b =
+            String.contains (String.toLower a) (String.toLower b)
 
         containsQuery =
-            String.contains lowerQuery << String.toLower
+            insensitiveContains query
 
-        queriedFilter =
-            List.filter (\course -> containsQuery (.code course) || containsQuery (defaultEntry (.name course)))
+        queriedFilter course =
+            containsQuery (.code course) || containsQuery (defaultEntry (.name course))
 
         hasCeqFilter =
-            List.filter <| ((<) 3) << (Maybe.withDefault 0) << .ceqAnswers
+            (<) 3 << Maybe.withDefault 0 << .ceqAnswers
+
+        coordinatorFilter course =
+            List.any (insensitiveContains coordinatorQuery) (getCoordinatorList course)
 
         courseLists prog =
             Maybe.andThen (\p -> Maybe.map .specializations (Dict.get p specializations)) prog
                 |> Maybe.map (List.map (\spec -> ( spec.name, spec.courselist )))
-                |> Maybe.withDefault ([ ( "All Courses", Dict.keys courses ) ])
+                |> Maybe.withDefault [ ( "All Courses", Dict.keys courses ) ]
+
+        prependIf pred el list =
+            if pred then
+                el :: list
+
+            else
+                list
 
         courseFilter list =
-            (if ceqOnly then
-                (hasCeqFilter << queriedFilter)
-             else
-                queriedFilter
-            )
+            List.filter
+                (\course ->
+                    List.all
+                        ((|>) course)
+                        ([ queriedFilter, coordinatorFilter ]
+                            |> prependIf ceqOnly hasCeqFilter
+                        )
+                )
                 (List.filterMap (\k -> Dict.get k courses) list)
 
         tableFromList titledList =
@@ -133,52 +156,55 @@ view { courses, tableState, collapsedTables, ceqOnly, ceqExtended, query, progra
                 symbol =
                     if collapsed then
                         "+ "
+
                     else
                         "- "
             in
-                div []
-                    ([ button [ onClick (ToggleCollapse title), class "accordion" ]
-                        [ span [ style [ ( "font-family", "\"Lucida Console\", Monaco, monospace" ) ] ] [ text symbol ]
-                        , text title
-                        ]
-                     ]
-                        ++ if collapsed then
+            div []
+                ([ button [ onClick (ToggleCollapse title), class "accordion" ]
+                    [ span [ style "font-family" "\"Lucida Console\", Monaco, monospace" ] [ text symbol ]
+                    , text title
+                    ]
+                 ]
+                    ++ (if collapsed then
                             []
-                           else
-                            [ Table.view config tableState (list) ]
-                    )
+
+                        else
+                            [ Table.view config tableState list ]
+                       )
+                )
 
         programOptionList =
             case program of
                 Nothing ->
-                    ([ option [ value "" ] [ text "all" ] ] ++ List.map (\prog -> option [ value prog ] [ text prog ]) (Dict.keys specializations))
+                    [ option [ value "" ] [ text "all" ] ] ++ List.map (\prog -> option [ value prog ] [ text prog ]) (Dict.keys specializations)
 
                 Just p ->
-                    ([ option [ value "" ] [ text "all" ] ] ++ List.map (\prog -> option [ value prog, selected (prog == p) ] [ text prog ]) (Dict.keys specializations))
+                    [ option [ value "" ] [ text "all" ] ] ++ List.map (\prog -> option [ value prog, selected (prog == p) ] [ text prog ]) (Dict.keys specializations)
     in
-        div []
-            ([ Html.node "link" [ Html.Attributes.rel "stylesheet", Html.Attributes.href "style.css" ] []
-             , h1 [] [ text "Courses" ]
-             , fieldset []
-                [ input [ placeholder "Filter by Name or Code", onInput SetQuery ] []
-                , label []
-                    [ text "Program: "
-                    , select [ onInput SetProgram ] programOptionList
-                    ]
-                , div [] []
-                , label []
-                    [ input [ type_ "checkbox", onClick ToggleCeqOnly, checked ceqOnly ] []
-                    , text "Only show courses with at least 3 CEQ answers"
-                    ]
-                , div [] []
-                , label []
-                    [ input [ type_ "checkbox", onClick ToggleCeqExtended, checked ceqExtended ] []
-                    , text "Show all CEQ parameters"
-                    ]
+    div []
+        ([ Html.node "link" [ Html.Attributes.rel "stylesheet", Html.Attributes.href "style.css" ] []
+         , h1 []
+            [ text "Courses for "
+            , select [ style "display" "inline-block", style "background-color" "#fff", style "border-radius" "5px", style "color" "#444", style "font-size" "38px", onInput SetProgram ] programOptionList
+            ]
+         , fieldset []
+            [ input [ placeholder "Filter by Name or Code", onInput SetQuery ] []
+            , input [ placeholder "Filter by Coordinator/Teacher", onInput SetCoordinatorQuery ] []
+            , div [] []
+            , label []
+                [ input [ type_ "checkbox", onClick ToggleCeqOnly, checked ceqOnly ] []
+                , text "Only show courses with at least 3 CEQ answers"
                 ]
-             ]
-                ++ (List.map tableFromList (List.map (Tuple.mapSecond courseFilter) (courseLists program)))
-            )
+            , div [] []
+            , label []
+                [ input [ type_ "checkbox", onClick ToggleCeqExtended, checked ceqExtended ] []
+                , text "Show all CEQ parameters"
+                ]
+            ]
+         ]
+            ++ List.map tableFromList (List.map (Tuple.mapSecond courseFilter) (courseLists program))
+        )
 
 
 defaultEntry : Maybe String -> String
@@ -227,6 +253,7 @@ customTheadHelp ( name, status, onClick ) =
                     [ Html.text name
                     , if selected then
                         coloredSymbol "#555" "↓"
+
                       else
                         coloredSymbol "#ccc" "↓"
                     ]
@@ -241,16 +268,17 @@ customTheadHelp ( name, status, onClick ) =
                     , coloredSymbol "#555"
                         (if isReversed then
                             "↑"
+
                          else
                             "↓"
                         )
                     ]
     in
-        Html.th [ onClick ] content
+    Html.th [ onClick ] content
 
 
 coloredSymbol color symbol =
-    Html.span [ style [ ( "color", color ) ] ] [ Html.text (" " ++ symbol) ]
+    Html.span [ style "color" color ] [ Html.text (" " ++ symbol) ]
 
 
 tableColumns =
@@ -263,7 +291,16 @@ tableColumns =
     , maybeIntColumn "Pass Rate" .pass
     , maybeIntColumn "Score" .score
     , maybeIntColumn "Importance" .important
+    , teacherColumn
     ]
+
+
+getCoordinator course =
+    getCoordinatorList course |> List.head
+
+
+getCoordinatorList course =
+    Dict.get course.code coordinators |> Maybe.withDefault [] |> List.map .name
 
 
 config : Table.Config Course Msg
@@ -311,19 +348,19 @@ customMaybeColumn toStr valueDefault name toMaybe =
         }
 
 
-maybeColumn : comparable -> String -> (data -> Maybe comparable) -> Table.Column data msg
-maybeColumn =
-    customMaybeColumn ((Maybe.withDefault "-") << (Maybe.map toString))
+maybeColumn : (comparable -> String) -> comparable -> String -> (data -> Maybe comparable) -> Table.Column data msg
+maybeColumn toString =
+    customMaybeColumn (Maybe.withDefault "-" << Maybe.map toString)
 
 
 maybeIntColumn : String -> (data -> Maybe Int) -> Table.Column data msg
 maybeIntColumn =
-    maybeColumn -101
+    maybeColumn String.fromInt -101
 
 
 maybeFloatColumn : String -> (data -> Maybe Float) -> Table.Column data msg
 maybeFloatColumn =
-    maybeColumn -1.0
+    maybeColumn String.fromFloat -1.0
 
 
 maybeStringColumn : String -> (data -> Maybe String) -> Table.Column data msg
@@ -376,5 +413,17 @@ maybeLinkColumn name toMaybeLink =
     Table.veryCustomColumn
         { name = name
         , viewData = viewMaybeLink << toMaybeLink
+        , sorter = Table.unsortable
+        }
+
+
+teacherColumn =
+    let
+        viewTeachers course =
+            Table.HtmlDetails [] (List.map (\x -> div [] [ text x ]) (getCoordinatorList course))
+    in
+    Table.veryCustomColumn
+        { name = "Teachers"
+        , viewData = viewTeachers
         , sorter = Table.unsortable
         }

@@ -304,11 +304,41 @@ def _create_specializations_table(courses, conn):
 
     conn.commit()
 
+def _find_coordinators(url):
+    soup = get_soup(url)
+    for tag in soup.find_all(lambda tag: tag.string == "Course coordinator: " or tag.string == "Teacher: "):
+        coord = tag.next_sibling
+        if coord.next_sibling.string:
+            yield coord.next_sibling.string.lower(), coord.string.rstrip(', \t')
+        else:
+            log.debug(f"no email for coordinator: {coord:<15} in syllabus: {url}")
+
+def _create_syllabuses_table(courses, conn):
+    coordinators = dict()
+    course_coord = dict()
+    c = conn.cursor()
+    c.execute('CREATE TABLE coordinators (email TEXT, name TEXT)')
+    c.execute('CREATE TABLE coordinator_course (coordinator TEXT, course TEXT)')
+    for (course_name, fields) in courses.courses.items():
+        if 'links_KE' in fields:
+            coord_list = list(_find_coordinators(fields['links_KE']))
+            c.executemany(
+                'INSERT INTO coordinators VALUES (?,?)',
+                coord_list
+            )
+            c.executemany(
+                'INSERT INTO coordinator_course VALUES (?,?)',
+                ((email, course_name) for (email, _name) in coord_list)
+            )
+    conn.commit()
+
+
 
 def _create(conn):
     courses = _build_courselist()
     _create_course_table(courses, conn)
     _create_specializations_table(courses, conn)
+    _create_syllabuses_table(courses, conn)
     conn.close()
 
 

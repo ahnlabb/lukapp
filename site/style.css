@@ -16,7 +16,7 @@ h3 {
   line-height: 1;
 }
 table {
-  width: 80%;
+  width: 100%;
 }
 .long {
   width: 30%;
@@ -25,7 +25,7 @@ table {
   background-color: #eee;
   border: none;
   outline: none;
-  width: 80%;
+  width: 100%;
   cursor: pointer;
   text-align: left;
   font-size: 1.2em;
@@ -54,8 +54,8 @@ table {
   color: black;
   border: 2px solid #555;
   margin: 4px 2%;
-  -webkit-transition-duration: 0.4s;
-  transition-duration: 0.4s;
+  -webkit-transition-duration: 0.2s;
+  transition-duration: 0.2s;
 }
 .landing-button:hover {
   background-color: #555555;

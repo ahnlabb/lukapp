@@ -3,7 +3,7 @@
 var css = require('./style.css');
 
 // Require index.html so it gets copied to dist
-require('./index.html');
+require('../index.html');
 
 import { Elm } from "./src/Main.elm";
 var mountNode = document.getElementById('main');

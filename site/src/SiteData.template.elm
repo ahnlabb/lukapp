@@ -1,4 +1,4 @@
-module SiteData exposing (Course, coordinators, courses, specializations)
+module SiteData exposing (Course, coordinators, courses, specializations, syllabuses)
 
 import Csv exposing (parse)
 import Csv.Decode as CD exposing (andMap, decodeCsv, field, map, maybe)
@@ -22,6 +22,11 @@ type alias Program =
 type alias Coordinator =
     { email : String
     , name : String
+    }
+
+
+type alias Syllabus =
+    { aim : String
     }
 
 
@@ -112,8 +117,16 @@ courseCoordinatorDecode =
     decodeString (dict (list (JD.map2 Coordinator (JD.field "email" string) (JD.field "name" string))))
 
 
+syllabusDecode =
+    decodeString (dict (JD.map Syllabus (JD.field "aim" string)))
+
+
 coordinators =
     Result.withDefault Dict.empty <| courseCoordinatorDecode courseCoordinatorData
+
+
+syllabuses =
+    Result.withDefault Dict.empty <| syllabusDecode syllabusData
 
 
 courseData : String
@@ -129,3 +142,7 @@ specData =
 
 courseCoordinatorData =
     """$course_coordinators"""
+
+
+syllabusData =
+    """$syllabuses"""

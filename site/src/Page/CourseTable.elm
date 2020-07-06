@@ -3,9 +3,10 @@ module Page.CourseTable exposing (Model, Msg, initModel, update, view)
 import Dict
 import Html exposing (Html, a, button, div, fieldset, h1, h3, input, label, option, select, span, text)
 import Html.Attributes exposing (checked, class, href, placeholder, selected, style, type_, value, width)
-import Html.Events exposing (onClick, onInput)
+import Html.Events exposing (onClick, onInput, stopPropagationOn)
+import Json.Decode as Json
 import Set
-import SiteData exposing (Course, coordinators, courses, specializations)
+import SiteData exposing (Course, coordinators, courses, specializations, syllabuses)
 import Table
 
 
@@ -18,6 +19,7 @@ type alias Model =
     , query : String
     , coordinatorQuery : String
     , program : Maybe String
+    , selectedCourse : Maybe String
     }
 
 
@@ -33,6 +35,7 @@ initModel program =
             , query = ""
             , coordinatorQuery = ""
             , program = program
+            , selectedCourse = Nothing
             }
     in
     model
@@ -46,6 +49,9 @@ type Msg
     | ToggleCeqOnly
     | ToggleCeqExtended
     | SetProgram String
+    | SetSelectedCourse String
+    | UnselectCourse
+    | NoUpdate
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -88,6 +94,21 @@ update msg model =
             , Cmd.none
             )
 
+        SetSelectedCourse code ->
+            ( { model | selectedCourse = Just code }
+            , Cmd.none
+            )
+
+        UnselectCourse ->
+            ( { model | selectedCourse = Nothing }
+            , Cmd.none
+            )
+
+        NoUpdate ->
+            ( model
+            , Cmd.none
+            )
+
         ToggleCollapse tableTitle ->
             ( { model
                 | collapsedTables =
@@ -102,7 +123,7 @@ update msg model =
 
 
 view : Model -> Html Msg
-view { courses, tableState, collapsedTables, ceqOnly, ceqExtended, query, coordinatorQuery, program } =
+view { courses, tableState, collapsedTables, ceqOnly, ceqExtended, query, coordinatorQuery, program, selectedCourse } =
     let
         insensitiveContains a b =
             String.contains (String.toLower a) (String.toLower b)
@@ -142,6 +163,13 @@ view { courses, tableState, collapsedTables, ceqOnly, ceqExtended, query, coordi
                 )
                 (List.filterMap (\k -> Dict.get k courses) list)
 
+        tableConf =
+            if ceqExtended then
+                configCeqExtended
+
+            else
+                config
+
         tableFromList titledList =
             let
                 title =
@@ -170,7 +198,7 @@ view { courses, tableState, collapsedTables, ceqOnly, ceqExtended, query, coordi
                             []
 
                         else
-                            [ Table.view config tableState list ]
+                            [ Table.view tableConf tableState list ]
                        )
                 )
 
@@ -183,28 +211,59 @@ view { courses, tableState, collapsedTables, ceqOnly, ceqExtended, query, coordi
                     [ option [ value "" ] [ text "all" ] ] ++ List.map (\prog -> option [ value prog, selected (prog == p) ] [ text prog ]) (Dict.keys specializations)
     in
     div []
-        ([ Html.node "link" [ Html.Attributes.rel "stylesheet", Html.Attributes.href "style.css" ] []
-         , h1 []
-            [ text "Courses for "
-            , select [ style "display" "inline-block", style "background-color" "#fff", style "border-radius" "5px", style "color" "#444", style "font-size" "38px", onInput SetProgram ] programOptionList
-            ]
-         , fieldset []
-            [ input [ placeholder "Filter by Name or Code", onInput SetQuery ] []
-            , input [ placeholder "Filter by Coordinator/Teacher", onInput SetCoordinatorQuery ] []
-            , div [] []
-            , label []
-                [ input [ type_ "checkbox", onClick ToggleCeqOnly, checked ceqOnly ] []
-                , text "Only show courses with at least 3 CEQ answers"
-                ]
-            , div [] []
-            , label []
-                [ input [ type_ "checkbox", onClick ToggleCeqExtended, checked ceqExtended ] []
-                , text "Show all CEQ parameters"
-                ]
-            ]
-         ]
+        (viewModal selectedCourse
+            ++ [ h1 []
+                    [ text "Courses for "
+                    , select [ style "display" "inline-block", style "background-color" "#fff", style "border-radius" "5px", style "color" "#444", style "font-size" "38px", onInput SetProgram ] programOptionList
+                    ]
+               , fieldset []
+                    [ input [ placeholder "Filter by Name or Code", onInput SetQuery ] []
+                    , input [ placeholder "Filter by Coordinator/Teacher", onInput SetCoordinatorQuery ] []
+                    , div [] []
+                    , label []
+                        [ input [ type_ "checkbox", onClick ToggleCeqOnly, checked ceqOnly ] []
+                        , text "Only show courses with at least 3 CEQ answers"
+                        ]
+                    , div [] []
+                    , label []
+                        [ input [ type_ "checkbox", onClick ToggleCeqExtended, checked ceqExtended ] []
+                        , text "Show all CEQ parameters"
+                        ]
+                    ]
+               ]
             ++ List.map tableFromList (List.map (Tuple.mapSecond courseFilter) (courseLists program))
         )
+
+
+viewModal selectedCourse =
+    case selectedCourse of
+        Just code ->
+            [ div [ class "modal", onClick UnselectCourse ]
+                [ div
+                    [ class "modal-content"
+                    , stopPropagationOn "click" (Json.succeed ( NoUpdate, True ))
+                    ]
+                    [ h1 []
+                        [ text (code ++ ": ")
+                        , Dict.get code courses |> Maybe.andThen .name |> Maybe.withDefault "" |> text
+                        ]
+                    , div []
+                        [ Dict.get code syllabuses
+                            |> Maybe.map .aim
+                            |> Maybe.withDefault ""
+                            |> text
+                        ]
+                    , h3 [] [ text "Teachers" ]
+                    , Dict.get code coordinators
+                        |> Maybe.withDefault []
+                        |> List.map (\t -> div [] [ text t.name ])
+                        |> div []
+                    ]
+                ]
+            ]
+
+        Nothing ->
+            []
 
 
 defaultEntry : Maybe String -> String
@@ -282,7 +341,7 @@ coloredSymbol color symbol =
 
 
 tableColumns =
-    [ Table.stringColumn "Course Code" .code
+    [ courseColumn
     , maybeFloatColumn "Credits" .credits
     , maybeStringColumn "Cycle" (Maybe.andThen (toEnum cycles) << .cycle)
     , longStringColumn "Course Name" .name
@@ -291,7 +350,6 @@ tableColumns =
     , maybeIntColumn "Pass Rate" .pass
     , maybeIntColumn "Score" .score
     , maybeIntColumn "Importance" .important
-    , teacherColumn
     ]
 
 
@@ -426,4 +484,16 @@ teacherColumn =
         { name = "Teachers"
         , viewData = viewTeachers
         , sorter = Table.unsortable
+        }
+
+
+courseColumn =
+    let
+        viewCourseCode course =
+            Table.HtmlDetails [] [ button [ class "landing-button", onClick (SetSelectedCourse course.code) ] [ text course.code ] ]
+    in
+    Table.veryCustomColumn
+        { name = "Course Code"
+        , viewData = viewCourseCode
+        , sorter = Table.increasingOrDecreasingBy .code
         }

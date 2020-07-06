@@ -4,19 +4,19 @@ page: index.html
 
 db: lot.db
 
-site/SiteData.elm: site/generate.py site/SiteData.template.elm lot.db
-	poetry run python3 site/generate.py ./lot.db ./site/SiteData.template.elm -o ./site/SiteData.elm
+site/src/SiteData.elm: site/generate.py site/src/SiteData.template.elm lot.db
+	poetry run python3 site/generate.py ./lot.db ./site/src/SiteData.template.elm -o ./site/src/SiteData.elm
 
-index.html: site/SiteData.elm site/Main.elm site/style.css
-	yarn webpack
+site/index.html: site/src/SiteData.elm site/src/Main.elm site/style.css site/index.js site/webpack.config.js
+	(cd site && npx webpack)
 
 reactor: site/Main.elm site/SiteData.elm
 	cd site && elm reactor
 
 lot.db:
-	poetry run python3 extract.py create
-	poetry run python3 extract.py ceq
+	poetry run python3 src/extract.py create
+	poetry run python3 src/extract.py ceq
 
 clean:
-	rm -f site/TableData.elm
+	rm -f site/src/TableData.elm
 	rm -f lot.db

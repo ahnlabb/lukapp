@@ -249,7 +249,6 @@ def _build_courselist():
     for prog in soup.find_all('input', attrs={'type': 'radio', 'name': 'prog'}):
         code = prog['value']
         name = prog.parent.get_text()
-        print(name)
         courses.add_program(code, name)
         prog_soup = get_query(val='program', prog=code, lang='en')
         courses.process_prog(prog_soup, code, name)
@@ -313,7 +312,7 @@ def _find_coordinators(soup, url):
             log.debug(f"no email for coordinator: {coord:<15} in syllabus: {url}")
 
 def _find_aim(soup):
-    soup.find('h2', string="Aim")
+    tag = soup.find('h2', string="Aim")
     aim = tag.next_sibling
     if aim.next_sibling:
         return aim.next_sibling.string

@@ -77,28 +77,35 @@ update msg model =
 
 view : Model -> Html Msg
 view { page } =
-    case page of
-        Home ->
-            div []
-                [ Html.main_ [ class "wrapper" ]
-                    [ Html.node "link" [ Html.Attributes.rel "stylesheet", Html.Attributes.href "style.css" ] []
-                    , div [ class "row" ]
-                        [ colMd []
-                            ([ button [ class "landing-button", onClick (OpenCourseTable "") ] [ text "All Courses" ] ]
-                                ++ List.map (\( key, prog ) -> button [ class "landing-button", class "program-button", onClick (OpenCourseTable key) ] [ text prog.name ]) (Dict.toList specializations)
-                            )
-                        , colMd [] [ about ]
-                        ]
-                    ]
-                , foot
-                ]
+    div []
+        [ Html.node "link" [ Html.Attributes.rel "stylesheet", Html.Attributes.href "../style.css" ] []
+        , case page of
+            Home ->
+                viewHome
 
-        CourseTable subModel ->
-            div []
-                [ div [ style "max-width" "150px" ] [ button [ onClick GoHome, class "landing-button" ] [ text "Home" ] ]
-                , CourseTable.view subModel
-                    |> Html.map CourseTableMsg
+            CourseTable subModel ->
+                div []
+                    [ div [ style "max-width" "150px" ] [ button [ onClick GoHome, class "landing-button" ] [ text "Home" ] ]
+                    , CourseTable.view subModel
+                        |> Html.map CourseTableMsg
+                    ]
+        ]
+
+
+viewHome =
+    div []
+        [ Html.main_ [ class "wrapper" ]
+            [ Html.node "link" [ Html.Attributes.rel "stylesheet", Html.Attributes.href "../style.css" ] []
+            , div [ class "row" ]
+                [ colMd []
+                    ([ button [ class "landing-button", onClick (OpenCourseTable "") ] [ text "All Courses" ] ]
+                        ++ List.map (\( key, prog ) -> button [ class "landing-button", class "program-button", onClick (OpenCourseTable key) ] [ text prog.name ]) (Dict.toList specializations)
+                    )
+                , colMd [] [ about ]
                 ]
+            ]
+        , foot
+        ]
 
 
 colMd : List (Html.Attribute msg) -> List (Html.Html msg) -> Html.Html msg

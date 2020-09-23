@@ -187,6 +187,7 @@ class CourseList():
         row = self.courses[course]
         if key in row and value != row[key]:
             self.conflicts.append((course, key, value))
+            #print(f'Conflict! {course} {row[key]} != {value}')
         else:
             row[key] = value
 
@@ -324,7 +325,8 @@ def _create_syllabuses_table(courses, conn):
     c.execute('CREATE TABLE coordinators (email TEXT, name TEXT)')
     c.execute('CREATE TABLE coordinator_course (coordinator TEXT, course TEXT)')
     c.execute('CREATE TABLE course_syllabus (course TEXT, aim TEXT)')
-    for (course_name, fields) in courses.courses.items():
+    NO_COURSES = len(courses.courses.items())
+    for (index, (course_name, fields)) in enumerate(courses.courses.items()):
         if 'links_KE' in fields:
             url = fields['links_KE']
             soup = get_soup(url)
@@ -338,7 +340,9 @@ def _create_syllabuses_table(courses, conn):
                 ((email, course_name) for (email, _name) in coord_list)
             )
             aim = _find_aim(soup)
-            print(aim)
+            log.debug('Course {}/{} {}'.format(index, NO_COURSES, course_name))
+            log.debug(aim.split('\n')[0] if aim else aim)
+
             if aim:
                 c.execute(
                     'INSERT INTO course_syllabus VALUES (?,?)',

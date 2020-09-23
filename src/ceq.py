@@ -30,7 +30,7 @@ async def _ceq_get_query(code, year, sp):
         sp -= 2
 
     url = f'http://www.ceq.lth.se/rapporter/{year}_{semester}/LP{sp}/{code}_{year}_{semester}_LP{sp}_slutrapport_en.html'
-    log.debug(f'requesting url: {url}')
+    #log.debug(f'requesting url: {url}')
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as resp:
             return resp.status, await resp.read(), str(resp.url)
@@ -39,7 +39,7 @@ async def _ceq_get_query(code, year, sp):
 async def _get_latest_ceq(code, sp, oldcoursecode=None):
     allsp = chain([sp], set(range(1, 5)) - {sp})
     for testsp in allsp:
-        for year in range(2018, 2014, -1):
+        for year in range(2020, 2014, -1):
             status, resp, url = await _ceq_get_query(code, year, testsp)
             if status == 200:
                 soup = BeautifulSoup(resp, 'html.parser')
@@ -99,7 +99,14 @@ def ceq(conn):
             getvalue = tablevalue(soup)
 
             passed = getvalue(re.compile('Number and share of passed students.*'))
-            data['pass_share'] = total_ratio_field(False)(passed)
+            try:
+                passRate = min(100, int(total_ratio_field(False)(passed))) # 122% pass rate ftw: https://www.ceq.lth.se/rapporter/2019_HT/LP2/VBEN15_2019_HT_LP2_slutrapport_en.html
+            except:
+                log.error(passed)
+                log.error('unknown PassShare. {}'.format(data['url']))
+                passRate = 0 # Should be None.
+            data['pass_share'] = passRate
+
             try:
                 answer_field = getvalue('Number answers and response rate')
                 data['answers'] = int(total_ratio_field(True)(answer_field))

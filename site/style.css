@@ -34,7 +34,7 @@ table {
   width: 50%;
   float: left;
 }
-@media screen and (max-width: 600px) {
+@media screen and (max-device-width:600px), screen and (max-width:600px) {
   .col {
     width: 100%;
   }
@@ -97,7 +97,7 @@ footer{
 .lth-program-button {
   width: 46%;
 }
-@media screen and (max-width: 800px) {
+@media screen and (max-device-width:800px), screen and (max-width:800px) {
   .lth-program-button {
     width: 96%;
   }

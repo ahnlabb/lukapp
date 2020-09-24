@@ -26,6 +26,7 @@ def _write_all(out, template):
     query = c.execute(f'SELECT {cols} FROM courses')
     courses = _query_to_csv(cols.split(', '), query)
     specializations = _process_specializations(c.execute('SELECT * FROM specializations'))
+    print(json.loads(specializations).keys())
     course_coordinators = _process_coordinator_course(list(c.execute('SELECT * FROM coordinator_course')), c.execute('SELECT * FROM coordinators'))
     syllabuses = _process_syllabuses(c.execute('SELECT * FROM course_syllabus'))
     out.write(template.substitute(courses=courses, specializations=specializations, course_coordinators=course_coordinators, syllabuses=syllabuses))
@@ -35,7 +36,7 @@ def _process_syllabuses(query):
     return json.dumps({code: {'aim': aim.replace('\n',' ')} for code, aim in query}, indent=4, ensure_ascii=False).replace('\\"', '\\\\\\"')
 
 def _process_specializations(query):
-    return json.dumps({code: [name, json.loads(courses)] for code, name, courses in query})
+    return json.dumps({code: [name, json.loads(courses)] for code, name, courses in query if json.loads(courses)})
 
 def _process_coordinator_course(coordinator_course, coordinators):
     courses = defaultdict(list)

@@ -61,9 +61,7 @@ table {
   background-color: #555555;
   color: white;
 }
-.program-button {
-  width: 46%;
-}
+
 .about {
   margin: 7%;
   margin: 4px 2px;
@@ -93,6 +91,55 @@ footer{
   background-color: #fefefe;
   margin: 15% auto; /* 15% from the top and centered */
   padding: 20px;
-  border: 1px solid #888;
+  border: 1px solid #855;
   width: 80%; /* Could be more or less, depending on screen size */
 }
+.lth-program-button {
+  width: 46%;
+}
+@media screen and (max-width: 800px) {
+  .lth-program-button {
+    width: 96%;
+  }
+}
+.program-button {
+  font-size: 1.1em;
+}
+.program-D {
+  background-color: #F280A155;
+}
+.program-C {
+  background-color: #9966CC55;
+}
+.program-F, .program-Pi, .program-N {
+  background-color: #eb712555;
+}
+.program-M, .program-MD {
+  background-color: #CD1B2255;
+}
+.program-K, .program-B {
+  background-color: #FAE91655;
+}
+.program-W {
+  background-color: #00cccc55;
+}
+.program-I {
+  background-color: #71002E55;
+}
+.program-V {
+  background-color: #1A377A55;
+}
+.program-L {
+  background-color: #53875355;
+}
+.program-BI, .program-RH {
+  background-color: #00000055;
+}
+.program-A {
+  background-color: #580f8b55;
+}
+
+.program-E {
+  background-color: #ffffff55;
+}
+

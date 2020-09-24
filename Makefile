@@ -12,7 +12,7 @@ index.html: site/app.js
 site/app.js: site/src/SiteData.elm site/src/Main.elm site/style.css site/index.js site/webpack.config.js
 	(cd site && npx webpack)
 
-reactor: site/Main.elm site/SiteData.elm
+reactor: site/src/SiteData.elm
 	cd site && elm reactor
 
 lot.db:

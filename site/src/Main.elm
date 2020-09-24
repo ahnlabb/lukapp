@@ -91,6 +91,13 @@ view { page } =
                     ]
         ]
 
+-- quick and dirty.
+hasManySpec = ((\l -> l >= 6) << List.length << (\x -> x.specializations) << Tuple.second)
+
+
+lthProgs = (List.filter (hasManySpec) (Dict.toList specializations))
+otherProgs = (List.filter (not << hasManySpec) (Dict.toList specializations))
+
 
 viewHome =
     div []
@@ -99,7 +106,8 @@ viewHome =
             , div [ class "row" ]
                 [ colMd []
                     ([ button [ class "landing-button", onClick (OpenCourseTable "") ] [ text "All Courses" ] ]
-                        ++ List.map (\( key, prog ) -> button [ class "landing-button", class "program-button", onClick (OpenCourseTable key) ] [ text prog.name ]) (Dict.toList specializations)
+                        ++ List.map (\( key, prog ) -> button [ class "landing-button", class "program-button", class "lth-program-button", class ("program-" ++ key) , onClick (OpenCourseTable key) ] [ text prog.name ]) lthProgs
+                        ++ List.map (\( key, prog ) -> button [ class "landing-button", class "program-button", onClick (OpenCourseTable key) ] [ text prog.name ]) otherProgs
                     )
                 , colMd [] [ about ]
                 ]

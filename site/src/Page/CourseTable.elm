@@ -138,6 +138,7 @@ view { courses, tableState, collapsedTables, ceqOnly, ceqExtended, query, coordi
             (<) 3 << Maybe.withDefault 0 << .ceqAnswers
 
         coordinatorFilter course =
+            (coordinatorQuery == "") || -- if teacherData not present still show course.
             List.any (insensitiveContains coordinatorQuery) (getCoordinatorList course)
 
         courseLists prog =
@@ -157,7 +158,7 @@ view { courses, tableState, collapsedTables, ceqOnly, ceqExtended, query, coordi
                 (\course ->
                     List.all
                         ((|>) course)
-                        ([ queriedFilter, coordinatorFilter ]
+                        ([ queriedFilter , coordinatorFilter ]
                             |> prependIf ceqOnly hasCeqFilter
                         )
                 )
@@ -490,7 +491,7 @@ teacherColumn =
 courseColumn =
     let
         viewCourseCode course =
-            Table.HtmlDetails [] [ button [ class "landing-button", onClick (SetSelectedCourse course.code) ] [ text course.code ] ]
+            Table.HtmlDetails [] [ button [ class "landing-button", class "course-button-in-table", onClick (SetSelectedCourse course.code) ] [ text course.code ] ]
     in
     Table.veryCustomColumn
         { name = "Course Code"

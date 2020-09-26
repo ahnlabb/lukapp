@@ -11,3 +11,5 @@ style.css
 yarn.lock
 poetry.lock
 site/index.html
+_site
+.jekyll-cache

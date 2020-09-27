@@ -305,7 +305,8 @@ def _create_specializations_table(courses, conn):
     conn.commit()
 
 def _find_coordinators(soup, url):
-    for tag in soup.find_all(lambda tag: tag.string == "Course coordinator: " or tag.string == "Teacher: "):
+    teacher_tags = ['Course coordinator:', 'Teacher:', 'Examinator:']
+    for tag in soup.find_all(lambda tag: tag.string != None and tag.string.strip() in teacher_tags):
         coord = tag.next_sibling
         if coord.next_sibling.string:
             yield coord.next_sibling.string.lower(), coord.string.rstrip(', \t')
@@ -326,7 +327,7 @@ def _create_syllabuses_table(courses, conn):
     c.execute('CREATE TABLE coordinator_course (coordinator TEXT, course TEXT)')
     c.execute('CREATE TABLE course_syllabus (course TEXT, aim TEXT)')
     NO_COURSES = len(courses.courses.items())
-    for (index, (course_name, fields)) in enumerate(courses.courses.items()):
+    for (index, (course_name,fields)) in enumerate(courses.courses.items()):
         if 'links_KE' in fields:
             url = fields['links_KE']
             soup = get_soup(url)

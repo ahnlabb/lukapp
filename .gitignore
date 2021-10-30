@@ -7,9 +7,9 @@ elm-stuff
 SiteData.elm
 ./index.html
 app.js
-style.css
 yarn.lock
 poetry.lock
 site/index.html
 _site
 .jekyll-cache
+package-lock.json

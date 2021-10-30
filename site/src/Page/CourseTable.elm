@@ -215,7 +215,7 @@ view { courses, tableState, collapsedTables, ceqOnly, ceqExtended, query, coordi
         (viewModal selectedCourse
             ++ [ h1 []
                     [ text "Courses for "
-                    , select [ style "display" "inline-block", style "background-color" "#fff", style "border-radius" "5px", style "color" "#444", style "font-size" "38px", onInput SetProgram ] programOptionList
+                    , select [ style "display" "inline-block", style "background-color" "#fff", style "border-radius" "5px", style "color" "#444", style "font-size" "20px", onInput SetProgram ] programOptionList
                     ]
                , fieldset []
                     [ input [ placeholder "Filter by Name or Code", onInput SetQuery ] []

@@ -54,7 +54,7 @@ main {
     flex: 1;
 }
 body {
-  margin: 40px auto;
+  margin: 20px auto;
   line-height: 1.6;
   font-size: 16px;
   color: #444;
@@ -157,6 +157,11 @@ footer{
   padding: 20px;
   border: 1px solid #855;
   width: 80%; /* Could be more or less, depending on screen size */
+}
+
+#lukapp {
+  font-size: 40px;
+  margin-bottom: 20px;
 }
 .lth-program-button {
   width: 46%;

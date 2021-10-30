@@ -78,8 +78,8 @@ update msg model =
 view : Model -> Html Msg
 view { page } =
     div []
-        [ Html.node "link" [ Html.Attributes.rel "stylesheet", Html.Attributes.href "../style.css" ] []
-        , case page of
+        [
+        case page of
             Home ->
                 viewHome
 
@@ -102,8 +102,7 @@ otherProgs = (List.filter (not << hasManySpec) (Dict.toList specializations))
 viewHome =
     div []
         [ Html.main_ [ class "wrapper" ]
-            [ Html.node "link" [ Html.Attributes.rel "stylesheet", Html.Attributes.href "../style.css" ] []
-            , div [ class "row" ]
+            [ div [ class "row" ]
                 [ colMd []
                     ([ button [ class "landing-button", onClick (OpenCourseTable "") ] [ text "All Courses" ] ]
                         ++ List.map (\( key, prog ) -> button [ class "landing-button", class "program-button", class "lth-program-button", class ("program-" ++ key) , onClick (OpenCourseTable key) ] [ text prog.name ]) lthProgs

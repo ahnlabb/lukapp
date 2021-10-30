@@ -39,7 +39,7 @@ async def _ceq_get_query(code, year, sp):
 async def _get_latest_ceq(code, sp, oldcoursecode=None):
     allsp = chain([sp], set(range(1, 5)) - {sp})
     for testsp in allsp:
-        for year in range(2020, 2014, -1):
+        for year in range(2021, 2018, -1):
             status, resp, url = await _ceq_get_query(code, year, testsp)
             if status == 200:
                 soup = BeautifulSoup(resp, 'html.parser')
